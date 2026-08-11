@@ -34,12 +34,6 @@ class NextPackageList extends StatelessWidget {
                 ),
               ]),
             )),
-        Center(
-          child: TextButton(
-            onPressed: onSeeNextSession,
-            child: const Text('Lihat sesi berikutnya', style: TextStyle(fontSize: 12.5)),
-          ),
-        ),
       ],
     );
   }

@@ -12,6 +12,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await findSystemLocale();
   await initializeDateFormatting(Intl.systemLocale);
+  await initializeDateFormatting('id_ID', null);
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const MainApp());
 }
