@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:getx_setup/config/routes/route_names.dart';
-import 'package:getx_setup/models/package/package_model.dart';
+import 'package:Swift/config/routes/route_names.dart';
+import 'package:Swift/models/package/package_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../data/dummy_packages.dart';

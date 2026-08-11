@@ -1,4 +1,4 @@
-package com.example.getx_setup
+package com.example.Swift
 
 import io.flutter.embedding.android.FlutterActivity
 

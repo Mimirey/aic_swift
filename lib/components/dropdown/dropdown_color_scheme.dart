@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:getx_setup/config/themes/app_colors.dart';
+import 'package:Swift/config/themes/app_colors.dart';
 
 /// Create instance custom for different themes.
 ///

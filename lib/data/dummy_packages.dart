@@ -1,4 +1,4 @@
-import 'package:getx_setup/models/package/package_model.dart';
+import 'package:Swift/models/package/package_model.dart';
 
 /// Data dummy sementara. Titik koordinat pakai area Semarang
 /// biar map dummy-nya realistis untuk testing rute.

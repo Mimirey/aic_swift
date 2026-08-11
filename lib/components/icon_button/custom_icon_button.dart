@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:getx_setup/components/custom_spacing.dart';
-import 'package:getx_setup/components/custom_text.dart';
+import 'package:Swift/components/custom_spacing.dart';
+import 'package:Swift/components/custom_text.dart';
 
 class CustomIconbutton extends StatelessWidget {
   final IconData? icon;

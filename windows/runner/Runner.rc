@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "getx_setup" "\0"
+            VALUE "FileDescription", "Swift" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "getx_setup" "\0"
+            VALUE "InternalName", "Swift" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "getx_setup.exe" "\0"
-            VALUE "ProductName", "getx_setup" "\0"
+            VALUE "OriginalFilename", "Swift.exe" "\0"
+            VALUE "ProductName", "Swift" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

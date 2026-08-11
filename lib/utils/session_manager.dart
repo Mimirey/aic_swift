@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:getx_setup/utils/app_secure_storage.dart';
-import 'package:getx_setup/utils/app_shared_preferances.dart';
+import 'package:Swift/utils/app_secure_storage.dart';
+import 'package:Swift/utils/app_shared_preferances.dart';
 
 class SessionManager {
   static const _accessToken = 'access_token';

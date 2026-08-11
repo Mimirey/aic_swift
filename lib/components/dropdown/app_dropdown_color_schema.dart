@@ -1,5 +1,5 @@
-import 'package:getx_setup/components/dropdown/dropdown_color_scheme.dart';
-import 'package:getx_setup/config/themes/app_colors.dart';
+import 'package:Swift/components/dropdown/dropdown_color_scheme.dart';
+import 'package:Swift/config/themes/app_colors.dart';
 
 extension AppDropdownColorScheme on DropdownColorScheme {
   /// Primary

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:getx_setup/components/custom_text.dart';
+import 'package:Swift/components/custom_text.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;

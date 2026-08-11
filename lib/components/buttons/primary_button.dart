@@ -19,16 +19,23 @@ class PrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
+        style: ButtonStyle(
+          backgroundColor: WidgetStatePropertyAll(AppColors.primaryLight)
+        ),
         child: isLoading
             ? const SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  valueColor: AlwaysStoppedAnimation(AppColors.textOnPrimary),
+                  valueColor: AlwaysStoppedAnimation(AppColors.primaryLight),
                 ),
               )
-            : Text(label),
+            : Text(label, style: TextStyle(
+              color: AppColors.inputFill,
+              fontWeight: FontWeight.bold,
+              fontSize: 18
+            ),),
       ),
     );
   }
