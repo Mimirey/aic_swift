@@ -1,3 +1,4 @@
+import 'package:Swift/core/utils/date_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/models/package/package_model.dart';
@@ -31,9 +32,11 @@ class _PackageListPageState extends State<PackageListPage> {
       }
       final lower = query.toLowerCase();
       _filtered = dummyPackages
-          .where((p) =>
-              p.resiNumber.toLowerCase().contains(lower) ||
-              p.customerName.toLowerCase().contains(lower))
+          .where(
+            (p) =>
+                p.resiNumber.toLowerCase().contains(lower) ||
+                p.customerName.toLowerCase().contains(lower),
+          )
           .toList();
     });
   }
@@ -52,7 +55,7 @@ class _PackageListPageState extends State<PackageListPage> {
             padding: const EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                '30 Juli 2026',
+                DateFormatter.fullIndo(DateTime.now()),
                 style: TextStyle(
                   color: AppColors.primaryLight,
                   fontWeight: FontWeight.w700,
@@ -66,14 +69,27 @@ class _PackageListPageState extends State<PackageListPage> {
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(context.horizontalPadding, 4, context.horizontalPadding, 12),
+            padding: EdgeInsets.fromLTRB(
+              context.horizontalPadding,
+              4,
+              context.horizontalPadding,
+              12,
+            ),
             child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Cari Paket...',
-                prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-                suffixIcon: const Icon(Icons.swap_vert_rounded, size: 20, color: AppColors.textSecondary),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+                suffixIcon: const Icon(
+                  Icons.swap_vert_rounded,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -96,13 +112,7 @@ class _PackageListPageState extends State<PackageListPage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 14),
                     itemBuilder: (context, index) {
                       final pkg = _filtered[index];
-                      return PackageCard(
-                        package: pkg,
-                        onTap: () {
-                          // TODO: navigasi ke detail paket / mulai rute.
-                          Navigator.of(context).pushNamed(AppRoutes.mapCalculating);
-                        },
-                      );
+                      return PackageCard(package: pkg);
                     },
                   ),
           ),

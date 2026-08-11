@@ -1,4 +1,6 @@
+import 'package:Swift/components/common/slide_to_action_button.dart';
 import 'package:Swift/components/task/route_calculating_overlay.dart';
+import 'package:Swift/core/utils/whatsapp_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,13 +10,13 @@ import 'package:Swift/components/task/task_summary_header.dart';
 import 'package:Swift/components/task/recipient_info_section.dart';
 import 'package:Swift/components/task/recipient_note_card.dart';
 import 'package:Swift/components/task/next_package_list.dart';
-import 'package:Swift/components/task/contact_recipient_button.dart';
 import 'package:Swift/data/dummy_next_packages.dart';
 import '../../components/buttons/primary_button.dart';
 import '../../components/task/current_package_preview.dart';
 import '../../components/task/route_info_chip.dart';
 import '../../components/task/task_assigned_header.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/date_formatter.dart';
 import '../../core/utils/responsive.dart';
 import '../../components/common/map_background.dart';
 import '../../components/common/date_chip.dart';
@@ -39,7 +41,7 @@ class _MapPageState extends State<MapPage> {
 
   static const _collapsedSize = 0.18;
   static const _peekSize = 0.5;
-  static const _fullSize = 1.0;
+  static const _fullSize = 0.85;
   static const _dummyCenter = LatLng(-6.9932, 110.4203);
   RouteState _routeState = dummyPackages.isEmpty
       ? RouteState.empty
@@ -86,9 +88,9 @@ class _MapPageState extends State<MapPage> {
                 horizontal: context.horizontalPadding,
                 vertical: 8,
               ),
-              child: const Align(
+              child: Align(
                 alignment: Alignment.topLeft,
-                child: DateChip(date: '30 Juli 2026'),
+                child: DateChip(date: DateFormatter.fullIndo(DateTime.now())),
               ),
             ),
           ),
@@ -146,7 +148,6 @@ class _MapPageState extends State<MapPage> {
                         subtitle:
                             'Belum ada paket yang ditugaskan ke akunmu hari ini.',
                       )
-                    
                     else if (_routeState == RouteState.assigned) ...[
                       TaskAssignedHeader(
                         totalPackages: dummyRouteSummary.totalPackages,
@@ -192,34 +193,76 @@ class _MapPageState extends State<MapPage> {
                           });
                         },
                       ),
-                    ]   
-                    else if (_routeState == RouteState.onRoute) ...[
+                    ] else if (_routeState == RouteState.onRoute) ...[
                       TaskSummaryHeader(
                         packageLabel: 'Package 1',
                         etaLabel: '40 Menit',
                         resiNumber: currentTaskPackage.resiNumber,
                       ),
-                      if (_stage != TaskSheetStage.collapsed) ...[
-                        RecipientInfoSection(
-                          name: currentTaskPackage.customerName,
-                          address: currentTaskPackage.address,
+                      AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 250),
+                        crossFadeState: _stage != TaskSheetStage.collapsed
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        firstChild: const SizedBox(
+                          width: double.infinity,
+                          height: 0,
                         ),
-                        if (currentTaskPackage.note != null)
-                          RecipientNoteCard(note: currentTaskPackage.note!),
-                      ],
-                      if (_stage == TaskSheetStage.full)
-                        NextPackageList(items: dummyNextPackages, onSeeNextSession: () {}),
-                      if (_stage != TaskSheetStage.collapsed) ...[
-                        const SizedBox(height: 16),
-                        ContactRecipientButton(onPressed: () {}),
-                      ],
+                        secondChild: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RecipientInfoSection(
+                              name: currentTaskPackage.customerName,
+                              address: currentTaskPackage.address,
+                            ),
+                            if (currentTaskPackage.note != null)
+                              RecipientNoteCard(note: currentTaskPackage.note!),
+                          ],
+                        ),
+                      ),
+                      AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 250),
+                        crossFadeState: _stage == TaskSheetStage.full
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        firstChild: const SizedBox(
+                          width: double.infinity,
+                          height: 0,
+                        ),
+                        secondChild: NextPackageList(
+                          items: dummyNextPackages,
+                          onSeeNextSession: () {},
+                        ),
+                      ),
+                      AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 250),
+                        crossFadeState: _stage != TaskSheetStage.collapsed
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        firstChild: const SizedBox(
+                          width: double.infinity,
+                          height: 0,
+                        ),
+                        secondChild: Column(
+                          children: [
+                            SizedBox(height: 16),
+                            SlideToActionButton(
+                              label: 'Geser untuk Hubungi Penerima',
+                              icon: Icons.arrow_forward_rounded,
+                              onConfirm: () =>
+                                  openWhatsApp(currentTaskPackage.phoneNumber),
+                            ), // lihat catatan di bawah
+                          ],
+                        ),
+                      ),
                     ],
-                  ]
+                  ],
                 ),
               );
             },
           ),
-          if (_routeState == RouteState.calculating) const RouteCalculatingOverlay(),
+          if (_routeState == RouteState.calculating)
+            const RouteCalculatingOverlay(),
         ],
       ),
     );

@@ -13,7 +13,7 @@ final List<PackageModel> dummyPackages = [
     isCod: true,
     codAmount: 125000,
     customerName: 'Usman Anak Myra',
-    phoneNumber: '085127638784',
+    phoneNumber: '085926637138',
     address: 'Jl. Mawar No. 12, Kel. Palmerah, Kec. Palmerah',
     note: 'Titip di Pos Satpam kalau tidak ada orang',
     status: DeliveryStatus.delivered,

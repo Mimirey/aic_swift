@@ -109,7 +109,7 @@ class _LoginPageState extends State<LoginPage> {
                     topRight: Radius.circular(28),
                   ),
                 ),
-                child: SingleChildScrollView(
+                child: Container(
                   padding: EdgeInsets.fromLTRB(
                     context.horizontalPadding,
                     28,
