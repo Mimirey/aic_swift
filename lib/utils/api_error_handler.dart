@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:getx_setup/models/metadata/enums.dart';
+import 'package:Swift/models/metadata/enums.dart';
 
 class ApiErrorHandler {
   static void handlePageState({

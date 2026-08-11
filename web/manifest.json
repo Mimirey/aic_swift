@@ -1,6 +1,6 @@
 {
-    "name": "getx_setup",
-    "short_name": "getx_setup",
+    "name": "Swift",
+    "short_name": "Swift",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

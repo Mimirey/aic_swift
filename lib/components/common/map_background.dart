@@ -32,6 +32,11 @@ class MapBackground extends StatelessWidget {
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
+        minZoom: 3,
+        maxZoom: 19,
+        cameraConstraint: CameraConstraint.contain(
+          bounds: LatLngBounds(const LatLng(-85, -180), const LatLng(85, 180)),
+        ),
         interactionOptions: InteractionOptions(
           flags: interactive ? InteractiveFlag.all : InteractiveFlag.none,
         ),
@@ -43,9 +48,7 @@ class MapBackground extends StatelessWidget {
         ),
         if (markers.isNotEmpty) MarkerLayer(markers: markers),
         const RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution('OpenStreetMap contributors'),
-          ],
+          attributions: [TextSourceAttribution('OpenStreetMap contributors')],
         ),
       ],
     );

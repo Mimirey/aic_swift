@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:getx_setup/config/routes/route_names.dart';
+import 'package:Swift/config/routes/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../components/buttons/primary_button.dart';
 import '../../components/inputs/custom_text_field.dart';
-
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -32,13 +31,11 @@ class _LoginPageState extends State<LoginPage> {
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     setState(() => _isLoading = false);
-    Navigator.of(context).pushReplacementNamed(AppRoutes.packageList);
+    Navigator.of(context).pushReplacementNamed(AppRoutes.map);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Tinggi gambar header dibuat proporsional ke tinggi layar, dengan batas
-    // atas & bawah biar tetap wajar di layar pendek (SE) maupun tinggi (Pro Max).
     final headerHeight = (context.screenHeight * 0.42).clamp(260.0, 380.0);
 
     return Scaffold(
@@ -47,15 +44,12 @@ class _LoginPageState extends State<LoginPage> {
         height: context.screenHeight,
         child: Stack(
           children: [
-            // Header: foto kurir + nama app
             SizedBox(
               height: headerHeight,
               width: double.infinity,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Placeholder foto kurir. Ganti dengan Image.asset('assets/images/courier.jpg')
-                  // atau Image.network(url) begitu asset final tersedia.
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -68,10 +62,13 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     child: const Center(
-                      child: Icon(Icons.local_shipping_rounded, size: 90, color: Colors.white24),
+                      child: Icon(
+                        Icons.local_shipping_rounded,
+                        size: 90,
+                        color: Colors.white24,
+                      ),
                     ),
                   ),
-                  // Overlay gradasi biar teks "Swift" tetap kebaca
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -99,8 +96,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
 
-            // Panel putih (form) - pakai SingleChildScrollView biar aman
-            // kalau keyboard muncul / layar pendek.
             Positioned(
               top: headerHeight - 28,
               left: 0,
@@ -124,18 +119,27 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Welcome Back',
-                        style: TextStyle(
-                          fontSize: context.scaled(22),
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primaryDark,
+                      Center(
+                        child: Column(
+                          children: [
+                            Text(
+                              'Welcome Back',
+                              style: TextStyle(
+                                fontSize: context.scaled(22),
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryDark,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Fill up the text field',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Fill up the text field',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 24),
                       CustomTextField(
@@ -161,14 +165,19 @@ class _LoginPageState extends State<LoginPage> {
                             width: 22,
                             child: Checkbox(
                               value: _rememberMe,
-                              activeColor: AppColors.primaryDark,
-                              onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                              activeColor: AppColors.textSecondary,
+                              onChanged: (v) =>
+                                  setState(() => _rememberMe = v ?? false),
                             ),
                           ),
                           const SizedBox(width: 8),
                           const Text(
                             'Remember For 30 Days',
-                            style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w500
+                            ),
                           ),
                         ],
                       ),
@@ -178,14 +187,13 @@ class _LoginPageState extends State<LoginPage> {
                         isLoading: _isLoading,
                         onPressed: _handleSignIn,
                       ),
-                      const SizedBox(height: 16),
                       Center(
                         child: TextButton(
                           onPressed: () {},
                           child: const Text(
                             'Forgot Password?',
                             style: TextStyle(
-                              color: AppColors.primaryLight,
+                              color: AppColors.primaryDark,
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                             ),

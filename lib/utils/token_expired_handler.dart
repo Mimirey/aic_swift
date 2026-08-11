@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:getx_setup/config/network/constant_api.dart';
-import 'package:getx_setup/utils/session_manager.dart';
+import 'package:Swift/config/network/constant_api.dart';
+import 'package:Swift/utils/session_manager.dart';
 
 class TokenExpiredInterceptor extends Interceptor {
   static bool _hasRedirected = false;

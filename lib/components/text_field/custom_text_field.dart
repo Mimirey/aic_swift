@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:getx_setup/components/text_field/date_input_formatter.dart';
+import 'package:Swift/components/text_field/date_input_formatter.dart';
 
 class CustomTextField extends StatelessWidget {
   final Color? fillColor, borderColor;

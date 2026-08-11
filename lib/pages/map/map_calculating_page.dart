@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:get/get_core/src/get_main.dart';
 import 'package:latlong2/latlong.dart';
+import '../../config/routes/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../components/common/map_background.dart';
@@ -13,7 +16,7 @@ class MapCalculatingPage extends StatefulWidget {
 }
 
 class _MapCalculatingPageState extends State<MapCalculatingPage>
-    with SingleTickerProviderStateMixin {
+  with SingleTickerProviderStateMixin {
   static const _dummyCenter = LatLng(-6.9932, 110.4203);
 
   late final AnimationController _controller;
@@ -25,6 +28,10 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      Get.offNamed(AppRoutes.map);
+    });
   }
 
   @override
@@ -39,7 +46,11 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
       body: Stack(
         children: [
           Positioned.fill(
-            child: MapBackground(center: _dummyCenter, zoom: 15, interactive: false),
+            child: MapBackground(
+              center: _dummyCenter,
+              zoom: 15,
+              interactive: false,
+            ),
           ),
           Positioned.fill(
             child: IgnorePointer(
@@ -48,7 +59,10 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
           ),
           SafeArea(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 8),
+              padding: EdgeInsets.symmetric(
+                horizontal: context.horizontalPadding,
+                vertical: 8,
+              ),
               child: const Align(
                 alignment: Alignment.topLeft,
                 child: DateChip(date: '30 Juli 2026'),
@@ -57,7 +71,9 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
           ),
           Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
+              padding: EdgeInsets.symmetric(
+                horizontal: context.horizontalPadding,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -75,7 +91,11 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
                   const Text(
                     'Mohon tunggu, kami sedang mengurutkan\nlokasi pengiriman tercepat.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),

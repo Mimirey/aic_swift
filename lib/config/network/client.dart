@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:getx_setup/config/network/constant_api.dart';
-import 'package:getx_setup/utils/session_manager.dart';
-import 'package:getx_setup/utils/token_expired_handler.dart';
+import 'package:Swift/config/network/constant_api.dart';
+import 'package:Swift/utils/session_manager.dart';
+import 'package:Swift/utils/token_expired_handler.dart';
 
 class Client {
   static final Dio dio = _createDio();
