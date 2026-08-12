@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:Swift/components/common/slide_to_action_button.dart';
 import 'package:Swift/components/common/user_location_marker.dart';
 import 'package:Swift/components/task/route_calculating_overlay.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_animations/flutter_map_animations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/components/common/sheet_drag_handle.dart';
@@ -18,7 +20,11 @@ import 'package:Swift/components/task/next_package_list.dart';
 import 'package:Swift/data/dummy_next_packages.dart';
 import '../../components/buttons/primary_button.dart';
 import '../../components/common/package_map_marker.dart';
+import '../../components/task/call_recipient_button.dart';
 import '../../components/task/current_package_preview.dart';
+import '../../components/task/package_photo_picker.dart';
+import '../../components/task/photo_preview_strip.dart';
+import '../../components/task/photo_viewer_sheet.dart';
 import '../../components/task/route_info_chip.dart';
 import '../../components/task/task_assigned_header.dart';
 import '../../core/theme/app_colors.dart';
@@ -29,6 +35,7 @@ import '../../components/common/date_chip.dart';
 import '../../components/common/empty_state_widget.dart';
 import '../../data/dummy_packages.dart';
 import '../../data/dummy_route_summary.dart';
+import '../../models/package/package_model.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
 
@@ -38,10 +45,50 @@ class MapPage extends StatefulWidget {
   State<MapPage> createState() => _MapPageState();
 }
 
-enum RouteState { empty, assigned, calculating, onRoute }
+enum RouteState { empty, assigned, calculating, onRoute, validating }
 
 class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _sheetController = DraggableScrollableController();
+  StreamSubscription<Position>? _positionSub;
+  static const double _arrivalThresholdMeters = 500000;
+  late List<PackageModel> _deliveryQueue;
+  PackageModel? get _currentPackage =>
+      _deliveryQueue.isNotEmpty ? _deliveryQueue.first : null;
+  List<PackageModel> get _upcomingPackages => _deliveryQueue.skip(1).toList();
+
+  void _startWatchingArrival() {
+    _positionSub =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10,
+          ),
+        ).listen((position) {
+          if (_routeState != RouteState.onRoute)
+            return; // cuma cek kalau lagi dalam perjalanan
+          final distance = distanceToTargetInMeters(
+            position,
+            _currentPackage!.latitude,
+            _currentPackage!.longitude,
+          );
+          if (distance <= _arrivalThresholdMeters) {
+            setState(() => _routeState = RouteState.validating);
+            _positionSub?.cancel();
+          }
+        });
+  }
+
+  void _handleConfirmPackage() {
+    if (_currentPackage == null) return;
+    setState(() {
+      _deliveryQueue.removeAt(0); 
+      _capturedPhotos
+          .clear(); 
+      _routeState = _deliveryQueue.isEmpty
+          ? RouteState.empty
+          : RouteState.onRoute;
+    });
+  }
 
   late final _animatedMapController = AnimatedMapController(
     vsync: this,
@@ -59,17 +106,43 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   RouteState _routeState = dummyPackages.isEmpty
       ? RouteState.empty
       : RouteState.assigned;
+
+  final List<XFile> _capturedPhotos = [];
+  Future<void> _handleCapturePhoto() async {
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+    if (photo == null) return;
+    setState(() => _capturedPhotos.add(photo));
+  }
+
+  String _formatCurrency(double amount) {
+    final str = amount.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      final posFromRight = str.length - i;
+      buffer.write(str[i]);
+      if (posFromRight > 1 && posFromRight % 3 == 1) buffer.write('.');
+    }
+    return 'Rp $buffer';
+  }
+
   @override
   void initState() {
     super.initState();
     _sheetController.addListener(_onSheetChanged);
     _loadCurrentLocation();
+    _deliveryQueue = List.of(dummyPackages);
   }
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _sheetController.removeListener(_onSheetChanged);
     _sheetController.dispose();
+    _animatedMapController.dispose();
     super.dispose();
   }
 
@@ -101,7 +174,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   List<Marker> _buildMarkers() {
     final packageMarkers = dummyPackages.map((pkg) {
-      final isActive = pkg.id == currentTaskPackage.id;
+      final isActive = pkg.id == _currentPackage!.id;
       return Marker(
         point: LatLng(pkg.latitude, pkg.longitude),
         width: isActive ? 34 : 16,
@@ -246,7 +319,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 10),
                       CurrentPackagePreview(
-                        address: currentTaskPackage.address,
+                        address: _currentPackage!.address,
                       ),
                       const SizedBox(height: 18),
                       PrimaryButton(
@@ -256,14 +329,22 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                           Future.delayed(const Duration(seconds: 2), () {
                             if (!mounted) return;
                             setState(() => _routeState = RouteState.onRoute);
+                            _startWatchingArrival();
                           });
                         },
                       ),
                     ] else if (_routeState == RouteState.onRoute) ...[
                       TaskSummaryHeader(
                         packageLabel: 'Package 1',
-                        etaLabel: '40 Menit',
-                        resiNumber: currentTaskPackage.resiNumber,
+                        trailing: const Text(
+                          '40 Menit',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryLight,
+                          ),
+                        ),
+                        resiNumber: _currentPackage!.resiNumber,
                       ),
                       AnimatedCrossFade(
                         duration: const Duration(milliseconds: 250),
@@ -278,11 +359,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             RecipientInfoSection(
-                              name: currentTaskPackage.customerName,
-                              address: currentTaskPackage.address,
+                              name: _currentPackage!.customerName,
+                              address: _currentPackage!.address,
                             ),
-                            if (currentTaskPackage.note != null)
-                              RecipientNoteCard(note: currentTaskPackage.note!),
+                            if (_currentPackage!.note != null)
+                              RecipientNoteCard(note: _currentPackage!.note!),
                           ],
                         ),
                       ),
@@ -296,7 +377,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                           height: 0,
                         ),
                         secondChild: NextPackageList(
-                          items: dummyNextPackages,
+                          items: _upcomingPackages.map(toNextPackageItem).toList(),
                           onSeeNextSession: () {},
                         ),
                       ),
@@ -316,9 +397,66 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                               label: 'Geser untuk Hubungi Penerima',
                               icon: Icons.arrow_forward_rounded,
                               onConfirm: () =>
-                                  openWhatsApp(currentTaskPackage.phoneNumber),
-                            ), 
+                                  openWhatsApp(_currentPackage!.phoneNumber),
+                            ),
                           ],
+                        ),
+                      ),
+                    ] else if (_routeState == RouteState.validating) ...[
+                      TaskSummaryHeader(
+                        packageLabel: 'Package 1',
+                        resiNumber: _currentPackage!.resiNumber,
+                        trailing: CallRecipientButton(
+                          phoneNumber: _currentPackage!.phoneNumber,
+                        ),
+                      ),
+                      RecipientInfoSection(
+                        name: _currentPackage!.customerName,
+                        address: _currentPackage!.address,
+                      ),
+                      if (_currentPackage!.note != null)
+                        RecipientNoteCard(note: _currentPackage!.note!),
+                      if (_currentPackage!.isCod &&
+                          _currentPackage!.codAmount != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tagihan COD: ${_formatCurrency(_currentPackage!.codAmount!)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.codAmount,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      PackagePhotoPicker(onTap: _handleCapturePhoto),
+                      const SizedBox(height: 10),
+                      PhotoPreviewStrip(
+                        photos: _capturedPhotos,
+                        onTapPhoto: (index) => showPhotoViewer(
+                          context,
+                          _capturedPhotos,
+                          index,
+                          onDelete: (i) =>
+                              setState(() => _capturedPhotos.removeAt(i)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      PrimaryButton(
+                        label: 'Konfirmasi Paket',
+                        onPressed:  _capturedPhotos.isEmpty ? null : _handleConfirmPackage,
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            'Laporan Kendala',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
                         ),
                       ),
                     ],

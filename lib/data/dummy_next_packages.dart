@@ -1,11 +1,9 @@
+import 'package:Swift/models/package/package_model.dart';
 import '../models/next_package_item.dart';
-import 'dummy_packages.dart';
 
-final currentTaskPackage = dummyPackages.first;
-final dummyNextPackages = dummyPackages
-    .skip(1) // lewatin currentTaskPackage
-    .map((p) => NextPackageItem(
-          address: p.address,
-          distanceLabel: '100m', 
-        ))
-    .toList();
+NextPackageItem toNextPackageItem(PackageModel package){
+  return NextPackageItem(
+    address: package.address,
+    distanceLabel: '100m'
+  );
+}
