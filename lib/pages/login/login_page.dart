@@ -1,9 +1,10 @@
+import 'package:Swift/components/custom_spacing.dart';
+import 'package:Swift/components/text_field/custom_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:Swift/config/routes/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../components/buttons/primary_button.dart';
-import '../../components/inputs/custom_text_field.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -40,14 +41,15 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
-      body: SizedBox(
-        height: context.screenHeight,
-        child: Stack(
-          children: [
-            SizedBox(
-              height: headerHeight,
-              width: double.infinity,
-              child: Stack(
+      body: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: headerHeight,
+            pinned: false,
+            backgroundColor: AppColors.primaryDark,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
                 fit: StackFit.expand,
                 children: [
                   DecoratedBox(
@@ -95,118 +97,116 @@ class _LoginPageState extends State<LoginPage> {
                 ],
               ),
             ),
-
-            Positioned(
-              top: headerHeight - 28,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
                 ),
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    context.horizontalPadding,
-                    28,
-                    context.horizontalPadding,
-                    24,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Column(
-                          children: [
-                            Text(
-                              'Welcome Back',
-                              style: TextStyle(
-                                fontSize: context.scaled(22),
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Fill up the text field',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      CustomTextField(
-                        label: 'Email Address',
-                        hint: 'Enter your Email Address',
-                        icon: Icons.email_outlined,
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 18),
-                      CustomTextField(
-                        label: 'Password',
-                        hint: 'Enter your Password',
-                        icon: Icons.lock_outline,
-                        isPassword: true,
-                        controller: _passwordController,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.horizontalPadding,
+                  28,
+                  context.horizontalPadding,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Column(
                         children: [
-                          SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              activeColor: AppColors.textSecondary,
-                              onChanged: (v) =>
-                                  setState(() => _rememberMe = v ?? false),
+                          Text(
+                            'Welcome Back',
+                            style: TextStyle(
+                              fontSize: context.scaled(22),
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryDark,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(height: 4),
                           const Text(
-                            'Remember For 30 Days',
+                            'Fill up the text field',
                             style: TextStyle(
                               fontSize: 13,
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w500
+                              color: AppColors.primary,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
-                      PrimaryButton(
-                        label: 'Sign In',
-                        isLoading: _isLoading,
-                        onPressed: _handleSignIn,
-                      ),
-                      Center(
-                        child: TextButton(
-                          onPressed: () {},
-                          child: const Text(
-                            'Forgot Password?',
-                            style: TextStyle(
-                              color: AppColors.primaryDark,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
+                    ),
+                    const SizedBox(height: 24),
+                    CustomTextField(
+                      label: 'Email Address',
+                      hint: 'Enter your Email Address',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      usePrefixIcon: true,
+                      controller: _emailController,
+                      textInputType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 18),
+                    CustomTextField(
+                      label: 'Password',
+                      hint: 'Enter your Password',
+                      prefixIcon: Icon(Icons.lock_outline),
+                      usePrefixIcon: true,
+                      textInputType: TextInputType.visiblePassword,
+                      controller: _passwordController,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: Checkbox(
+                            value: _rememberMe,
+                            activeColor: AppColors.textSecondary,
+                            onChanged: (v) =>
+                                setState(() => _rememberMe = v ?? false),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Remember For 30 Days',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    PrimaryButton(
+                      label: 'Sign In',
+                      isLoading: _isLoading,
+                      onPressed: _handleSignIn,
+                    ),
+                    Center(
+                      child: TextButton(
+                        onPressed: () {},
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            color: AppColors.primaryDark,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const CustomSpacing(height: 84),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
