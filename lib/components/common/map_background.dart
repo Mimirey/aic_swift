@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+//ntahlah aku keep ini buat dibaca aja
 
-/// Wrapper FlutterMap pakai tile OpenStreetMap (gratis, tanpa API key).
-///
 /// Catatan penting:
 /// - Tile server `tile.openstreetmap.org` punya usage policy & rate limit
 ///   buat production (lihat: https://operations.osmfoundation.org/policies/tiles/).
@@ -13,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 ///   `urlTemplate` di bawah.
 /// - `userAgentPackageName` wajib diisi sesuai applicationId project kamu.
 class MapBackground extends StatelessWidget {
+  final MapController? controller;
   final LatLng center;
   final double zoom;
   final List<Marker> markers;
@@ -20,6 +20,7 @@ class MapBackground extends StatelessWidget {
 
   const MapBackground({
     super.key,
+    this.controller,
     required this.center,
     this.zoom = 14,
     this.markers = const [],
@@ -29,6 +30,7 @@ class MapBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FlutterMap(
+      mapController: controller,
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
