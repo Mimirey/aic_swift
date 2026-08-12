@@ -1,7 +1,12 @@
 import 'package:Swift/components/common/slide_to_action_button.dart';
+import 'package:Swift/components/common/user_location_marker.dart';
 import 'package:Swift/components/task/route_calculating_overlay.dart';
+import 'package:Swift/core/utils/location_service.dart';
 import 'package:Swift/core/utils/whatsapp_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_animations/flutter_map_animations.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:Swift/config/routes/route_names.dart';
@@ -12,6 +17,7 @@ import 'package:Swift/components/task/recipient_note_card.dart';
 import 'package:Swift/components/task/next_package_list.dart';
 import 'package:Swift/data/dummy_next_packages.dart';
 import '../../components/buttons/primary_button.dart';
+import '../../components/common/package_map_marker.dart';
 import '../../components/task/current_package_preview.dart';
 import '../../components/task/route_info_chip.dart';
 import '../../components/task/task_assigned_header.dart';
@@ -28,17 +34,24 @@ enum TaskSheetStage { collapsed, peek, full }
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
-
   @override
   State<MapPage> createState() => _MapPageState();
 }
 
 enum RouteState { empty, assigned, calculating, onRoute }
 
-class _MapPageState extends State<MapPage> {
+class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _sheetController = DraggableScrollableController();
-  TaskSheetStage _stage = TaskSheetStage.collapsed;
 
+  late final _animatedMapController = AnimatedMapController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+    curve: Curves.easeInOut,
+  );
+
+  TaskSheetStage _stage = TaskSheetStage.collapsed;
+  Position? _currentPosition;
+  final _mapController = MapController();
   static const _collapsedSize = 0.18;
   static const _peekSize = 0.5;
   static const _fullSize = 0.85;
@@ -50,6 +63,7 @@ class _MapPageState extends State<MapPage> {
   void initState() {
     super.initState();
     _sheetController.addListener(_onSheetChanged);
+    _loadCurrentLocation();
   }
 
   @override
@@ -57,6 +71,22 @@ class _MapPageState extends State<MapPage> {
     _sheetController.removeListener(_onSheetChanged);
     _sheetController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    final position = await getCurrentUserLocation();
+    if (!mounted || position == null) return;
+    setState(() => _currentPosition = position);
+  }
+
+  Future<void> _handleRelocate() async {
+    final position = await getCurrentUserLocation();
+    if (position == null || !mounted) return;
+
+    _animatedMapController.animateTo(
+      dest: LatLng(position.latitude, position.longitude),
+      zoom: 16,
+    );
   }
 
   void _onSheetChanged() {
@@ -69,6 +99,32 @@ class _MapPageState extends State<MapPage> {
     if (newStage != _stage) setState(() => _stage = newStage);
   }
 
+  List<Marker> _buildMarkers() {
+    final packageMarkers = dummyPackages.map((pkg) {
+      final isActive = pkg.id == currentTaskPackage.id;
+      return Marker(
+        point: LatLng(pkg.latitude, pkg.longitude),
+        width: isActive ? 34 : 16,
+        height: isActive ? 34 : 16,
+        child: PackageMapMarker(isActive: isActive),
+      );
+    }).toList();
+    if (_currentPosition != null) {
+      packageMarkers.add(
+        Marker(
+          point: LatLng(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+          ),
+          width: 40,
+          height: 40,
+          child: const UserLocationMarker(),
+        ),
+      );
+    }
+    return packageMarkers;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasPackages = dummyPackages.isNotEmpty;
@@ -76,7 +132,14 @@ class _MapPageState extends State<MapPage> {
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: MapBackground(center: _dummyCenter, zoom: 15)),
+          Positioned.fill(
+            child: MapBackground(
+              center: _dummyCenter,
+              zoom: 15,
+              markers: _buildMarkers(),
+              controller: _animatedMapController.mapController,
+            ),
+          ),
           Positioned.fill(
             child: IgnorePointer(
               child: Container(color: Colors.white.withOpacity(0.15)),
@@ -109,7 +172,10 @@ class _MapPageState extends State<MapPage> {
                       onTap: () => Get.toNamed(AppRoutes.packageList),
                     ),
                     const SizedBox(height: 10),
-                    _MapFab(icon: Icons.my_location_rounded, onTap: () {}),
+                    _MapFab(
+                      icon: Icons.my_location_rounded,
+                      onTap: _handleRelocate,
+                    ),
                   ],
                 ),
               ),
@@ -251,7 +317,7 @@ class _MapPageState extends State<MapPage> {
                               icon: Icons.arrow_forward_rounded,
                               onConfirm: () =>
                                   openWhatsApp(currentTaskPackage.phoneNumber),
-                            ), // lihat catatan di bawah
+                            ), 
                           ],
                         ),
                       ),
@@ -286,7 +352,7 @@ class _MapFab extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 20, color: AppColors.primaryDark),
+          child: Icon(icon, size: 20, color: AppColors.primaryLight),
         ),
       ),
     );

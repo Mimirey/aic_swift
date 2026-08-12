@@ -97,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
 
             Positioned(
-              top: headerHeight - 28,
+              top: headerHeight - 20,
               left: 0,
               right: 0,
               bottom: 0,
