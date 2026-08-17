@@ -2,9 +2,12 @@ import 'package:Swift/components/custom_spacing.dart';
 import 'package:Swift/components/text_field/custom_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:Swift/config/routes/route_names.dart';
+import 'package:get/get.dart';
+import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../components/buttons/primary_button.dart';
+import '../../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,12 +30,24 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleSignIn() async {
-    // TODO: ganti dengan pemanggilan API auth beneran.
+    final username = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (username.isEmpty || password.isEmpty) {
+      Get.snackbar('Gagal', 'Email dan password wajib diisi');
+      return;
+    }
+
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    Navigator.of(context).pushReplacementNamed(AppRoutes.map);
+    try {
+      await AuthService.instance.login(username: username, password: password);
+      if (!mounted) return;
+      Get.offNamed(AppRoutes.map);
+    } on ApiException catch (e) {
+      Get.snackbar('Login Gagal', e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
