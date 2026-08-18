@@ -4,8 +4,9 @@ import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/models/package/package_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
-import '../../data/dummy_packages.dart';
 import '../../components/cards/package_card.dart';
+import 'package:Swift/services/shipment_service.dart';
+import 'package:Swift/models/shipment_model.dart';
 
 class PackageListPage extends StatefulWidget {
   const PackageListPage({super.key});
@@ -16,7 +17,15 @@ class PackageListPage extends StatefulWidget {
 
 class _PackageListPageState extends State<PackageListPage> {
   final _searchController = TextEditingController();
-  List<PackageModel> _filtered = dummyPackages;
+  List<PackageModel> _packages = [];
+  List<PackageModel> _filtered = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackages();
+  }
 
   @override
   void dispose() {
@@ -24,14 +33,40 @@ class _PackageListPageState extends State<PackageListPage> {
     super.dispose();
   }
 
+  Future<void> _loadPackages() async {
+    try {
+      final shipments = await ShipmentService.instance.getShipments();
+
+      final packages = shipments.map(_shipmentToPackage).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _packages = packages;
+        _filtered = packages;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('PACKAGE LIST ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   void _onSearchChanged(String query) {
     setState(() {
       if (query.trim().isEmpty) {
-        _filtered = dummyPackages;
+        _filtered = _packages;
         return;
       }
+
       final lower = query.toLowerCase();
-      _filtered = dummyPackages
+
+      _filtered = _packages
           .where(
             (p) =>
                 p.resiNumber.toLowerCase().contains(lower) ||
@@ -39,6 +74,41 @@ class _PackageListPageState extends State<PackageListPage> {
           )
           .toList();
     });
+  }
+
+  PackageModel _shipmentToPackage(ShipmentModel shipment) {
+    return PackageModel(
+      id: shipment.paket.id.toString(),
+      resiNumber: shipment.resi,
+      serviceType: shipment.paket.serviceType.toLowerCase() == 'express'
+          ? ServiceType.express
+          : ServiceType.regular,
+      isCod: shipment.cod.amount > 0,
+      codAmount: shipment.cod.amount,
+      customerName: shipment.paket.nama,
+      phoneNumber: shipment.paket.nomorTelepon,
+      address: shipment.paket.alamat,
+      note: null,
+      status: _mapStatus(shipment.status),
+      latitude: shipment.paket.latitude,
+      longitude: shipment.paket.longitude
+    );
+  }
+
+  DeliveryStatus _mapStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'delivered':
+        return DeliveryStatus.delivered;
+
+      case 'picked_up':
+        return DeliveryStatus.onTheWay;
+
+      case 'assigned':
+        return DeliveryStatus.pending;
+
+      default:
+        return DeliveryStatus.pending;
+    }
   }
 
   @override
@@ -94,7 +164,9 @@ class _PackageListPageState extends State<PackageListPage> {
             ),
           ),
           Expanded(
-            child: _filtered.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
                 ? const Center(
                     child: Text(
                       'Paket tidak ditemukan',
@@ -112,6 +184,7 @@ class _PackageListPageState extends State<PackageListPage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 14),
                     itemBuilder: (context, index) {
                       final pkg = _filtered[index];
+
                       return PackageCard(package: pkg);
                     },
                   ),
