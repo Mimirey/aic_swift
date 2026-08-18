@@ -15,7 +15,6 @@ class AuthService {
       ApiConstants.login,
       body: {'username': username, 'password': password},
     );
-    print('RESPONSE LOGIN: $json');
     final result = AuthResponseModel.fromJson(json);
     await TokenStorage.saveToken(result.token);
     return result;

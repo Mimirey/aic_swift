@@ -36,6 +36,10 @@ import '../../components/common/empty_state_widget.dart';
 import '../../data/dummy_packages.dart';
 import '../../data/dummy_route_summary.dart';
 import '../../models/package/package_model.dart';
+import 'package:Swift/services/tracking_service.dart';
+import 'package:Swift/services/shipment_service.dart';
+
+import '../../models/shipment_model.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
 
@@ -50,11 +54,14 @@ enum RouteState { empty, assigned, calculating, onRoute, validating }
 class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _sheetController = DraggableScrollableController();
   StreamSubscription<Position>? _positionSub;
-  static const double _arrivalThresholdMeters = 500000;
-  late List<PackageModel> _deliveryQueue;
+  static const double _arrivalThresholdMeters = 50;
+  List<PackageModel> _deliveryQueue = [];
   PackageModel? get _currentPackage =>
       _deliveryQueue.isNotEmpty ? _deliveryQueue.first : null;
   List<PackageModel> get _upcomingPackages => _deliveryQueue.skip(1).toList();
+
+  List<ShipmentModel> _shipments = [];
+  bool _isLoadingShipments = false;
 
   void _startWatchingArrival() {
     _positionSub =
@@ -64,13 +71,23 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             distanceFilter: 10,
           ),
         ).listen((position) {
-          if (_routeState != RouteState.onRoute)
-            return; // cuma cek kalau lagi dalam perjalanan
+          if (_routeState != RouteState.onRoute) {
+            return;
+          }
+
+          _trackingService.sendPosition(
+            lat: position.latitude,
+            lon: position.longitude,
+            bearing: position.heading,
+            speed: position.speed,
+          );
+
           final distance = distanceToTargetInMeters(
             position,
             _currentPackage!.latitude,
             _currentPackage!.longitude,
           );
+
           if (distance <= _arrivalThresholdMeters) {
             setState(() => _routeState = RouteState.validating);
             _positionSub?.cancel();
@@ -81,9 +98,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   void _handleConfirmPackage() {
     if (_currentPackage == null) return;
     setState(() {
-      _deliveryQueue.removeAt(0); 
-      _capturedPhotos
-          .clear(); 
+      _deliveryQueue.removeAt(0);
+      _capturedPhotos.clear();
       _routeState = _deliveryQueue.isEmpty
           ? RouteState.empty
           : RouteState.onRoute;
@@ -99,13 +115,12 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   TaskSheetStage _stage = TaskSheetStage.collapsed;
   Position? _currentPosition;
   final _mapController = MapController();
+  final _trackingService = TrackingService.instance;
   static const _collapsedSize = 0.18;
   static const _peekSize = 0.5;
   static const _fullSize = 0.85;
   static const _dummyCenter = LatLng(-6.9932, 110.4203);
-  RouteState _routeState = dummyPackages.isEmpty
-      ? RouteState.empty
-      : RouteState.assigned;
+  RouteState _routeState = RouteState.empty;
 
   final List<XFile> _capturedPhotos = [];
   Future<void> _handleCapturePhoto() async {
@@ -116,6 +131,59 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
     if (photo == null) return;
     setState(() => _capturedPhotos.add(photo));
+  }
+
+  Future<void> _loadShipments() async {
+    try {
+      final shipments = await ShipmentService.instance.getShipments();
+      final packages = shipments.map(_shipmentToPackage).toList();
+      if (!mounted) return;
+      setState(() {
+        _deliveryQueue = packages;
+        if (packages.isEmpty) {
+          _routeState = RouteState.empty;
+        } else {
+          _routeState = RouteState.assigned;
+        }
+      });
+    } catch (e) {
+      print('LOAD SHIPMENTS ERROR: $e');
+    }
+  }
+
+  PackageModel _shipmentToPackage(ShipmentModel shipment) {
+    return PackageModel(
+      id: shipment.paket.id.toString(),
+      resiNumber: shipment.resi,
+      serviceType: shipment.paket.serviceType.toLowerCase() == 'express'
+          ? ServiceType.express
+          : ServiceType.regular,
+      isCod: shipment.cod.status != 'pending' || shipment.cod.amount > 0,
+      codAmount: shipment.cod.amount,
+      customerName: shipment.paket.nama,
+      phoneNumber: shipment.paket.nomorTelepon,
+      address: shipment.paket.alamat,
+      note: null,
+      status: _mapShipmentStatus(shipment.status),
+      latitude: shipment.paket.latitude,
+      longitude: shipment.paket.longitude,
+    );
+  }
+
+  DeliveryStatus _mapShipmentStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'assigned':
+        return DeliveryStatus.pending;
+
+      case 'picked_up':
+        return DeliveryStatus.onTheWay;
+
+      case 'delivered':
+        return DeliveryStatus.delivered;
+
+      default:
+        return DeliveryStatus.pending;
+    }
   }
 
   String _formatCurrency(double amount) {
@@ -134,7 +202,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     super.initState();
     _sheetController.addListener(_onSheetChanged);
     _loadCurrentLocation();
-    _deliveryQueue = List.of(dummyPackages);
+    _connectTracking();
+    _loadShipments();
   }
 
   @override
@@ -143,7 +212,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _sheetController.removeListener(_onSheetChanged);
     _sheetController.dispose();
     _animatedMapController.dispose();
+    _trackingService.disconnect();
     super.dispose();
+  }
+
+  Future<void> _connectTracking() async {
+    try {
+      await _trackingService.connect();
+      _trackingService.ping();
+    } catch (e) {
+      print('TRACKING ERROR: $e');
+    }
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -173,8 +252,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   List<Marker> _buildMarkers() {
-    final packageMarkers = dummyPackages.map((pkg) {
-      final isActive = pkg.id == _currentPackage!.id;
+    final packageMarkers = _deliveryQueue.map((pkg) {
+      final isActive = _currentPackage != null && pkg.id == _currentPackage!.id;
+
       return Marker(
         point: LatLng(pkg.latitude, pkg.longitude),
         width: isActive ? 34 : 16,
@@ -182,6 +262,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         child: PackageMapMarker(isActive: isActive),
       );
     }).toList();
+
     if (_currentPosition != null) {
       packageMarkers.add(
         Marker(
@@ -195,6 +276,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         ),
       );
     }
+
     return packageMarkers;
   }
 
@@ -288,9 +370,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                             'Belum ada paket yang ditugaskan ke akunmu hari ini.',
                       )
                     else if (_routeState == RouteState.assigned) ...[
-                      TaskAssignedHeader(
-                        totalPackages: dummyRouteSummary.totalPackages,
-                      ),
+                      TaskAssignedHeader(totalPackages: _deliveryQueue.length),
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -318,9 +398,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      CurrentPackagePreview(
-                        address: _currentPackage!.address,
-                      ),
+                      CurrentPackagePreview(address: _currentPackage!.address),
                       const SizedBox(height: 18),
                       PrimaryButton(
                         label: 'Mulai Optimasi Rute',
@@ -377,7 +455,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                           height: 0,
                         ),
                         secondChild: NextPackageList(
-                          items: _upcomingPackages.map(toNextPackageItem).toList(),
+                          items: _upcomingPackages
+                              .map(toNextPackageItem)
+                              .toList(),
                           onSeeNextSession: () {},
                         ),
                       ),
@@ -444,7 +524,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                       const SizedBox(height: 16),
                       PrimaryButton(
                         label: 'Konfirmasi Paket',
-                        onPressed:  _capturedPhotos.isEmpty ? null : _handleConfirmPackage,
+                        onPressed: _capturedPhotos.isEmpty
+                            ? null
+                            : _handleConfirmPackage,
                       ),
                       const SizedBox(height: 8),
                       Center(
