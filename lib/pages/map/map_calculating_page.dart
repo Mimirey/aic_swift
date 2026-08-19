@@ -1,44 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
 import 'package:latlong2/latlong.dart';
-import '../../config/routes/route_names.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/utils/responsive.dart';
-import '../../components/common/map_background.dart';
-import '../../components/common/date_chip.dart';
+import 'package:Swift/controllers/map_calculating_controller.dart';
+import 'package:Swift/core/theme/app_colors.dart';
+import 'package:Swift/core/utils/responsive.dart';
+import 'package:Swift/components/common/map_background.dart';
+import 'package:Swift/components/common/date_chip.dart';
 
-class MapCalculatingPage extends StatefulWidget {
+class MapCalculatingPage extends GetView<MapCalculatingController> {
   const MapCalculatingPage({super.key});
 
-  @override
-  State<MapCalculatingPage> createState() => _MapCalculatingPageState();
-}
-
-class _MapCalculatingPageState extends State<MapCalculatingPage>
-  with SingleTickerProviderStateMixin {
   static const _dummyCenter = LatLng(-6.9932, 110.4203);
-
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Get.offNamed(AppRoutes.map);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +49,7 @@ class _MapCalculatingPageState extends State<MapCalculatingPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _PulsingPin(controller: _controller),
+                  _PulsingPin(controller: controller.pulseController),
                   const SizedBox(height: 22),
                   Text(
                     'Menghitung Rute...',
@@ -144,7 +116,11 @@ class _PulsingPin extends StatelessWidget {
                   color: AppColors.background,
                 ),
               ),
-              const Icon(Icons.location_on, color: AppColors.primary, size: 46),
+              const Icon(
+                Icons.location_on,
+                color: AppColors.primary,
+                size: 46,
+              ),
             ],
           );
         },

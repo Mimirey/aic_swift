@@ -11,21 +11,24 @@ class TrackingService {
 
   WebSocketChannel? _channel;
 
-  Future<void> connect() async {
-    final token = await TokenStorage.readToken();
+  Future<bool> connect() async {
+  final token = await TokenStorage.readToken();
 
-    if (token == null || token.isEmpty) {
-      throw Exception('Token tidak ditemukan');
-    }
+  if (token == null || token.isEmpty) {
+    throw Exception('Token tidak ditemukan');
+  }
 
-    final uri = Uri.parse(
-      'wss://msi-abcd.tailc3de19.ts.net/api/v1/ws/driver/position?token=$token',
-    );
+  final uri = Uri.parse(
+    'wss://davis-malvaceous-glenda.ngrok-free.dev'
+    '/api/v1/ws/driver/position?token=$token',
+  );
 
-    print('Connecting WebSocket...');
-
-    _channel = WebSocketChannel.connect(uri);
-
+  print('Connecting WebSocket...');
+  try {
+    final channel = WebSocketChannel.connect(uri);
+    await channel.ready;
+    _channel = channel;
+    print('WebSocket CONNECTED');
     _channel!.stream.listen(
       (message) {
         print('WS MESSAGE: $message');
@@ -35,9 +38,16 @@ class TrackingService {
       },
       onDone: () {
         print('WS CLOSED');
+        _channel = null;
       },
     );
+    ping();
+    return true;
+  } catch (e) {
+    _channel = null;
+    return false;
   }
+}
 
   void sendPosition({
     required double lat,
