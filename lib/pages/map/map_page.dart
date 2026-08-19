@@ -33,13 +33,13 @@ import '../../core/utils/responsive.dart';
 import '../../components/common/map_background.dart';
 import '../../components/common/date_chip.dart';
 import '../../components/common/empty_state_widget.dart';
-import '../../data/dummy_packages.dart';
-import '../../data/dummy_route_summary.dart';
+import '../../models/optimized_route_model.dart';
 import '../../models/package/package_model.dart';
 import 'package:Swift/services/tracking_service.dart';
 import 'package:Swift/services/shipment_service.dart';
-
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import '../../models/shipment_model.dart';
+import '../../services/route_service.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
 
@@ -74,7 +74,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
           if (_routeState != RouteState.onRoute) {
             return;
           }
-
           _trackingService.sendPosition(
             lat: position.latitude,
             lon: position.longitude,
@@ -119,7 +118,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   static const _collapsedSize = 0.18;
   static const _peekSize = 0.5;
   static const _fullSize = 0.85;
-  static const _dummyCenter = LatLng(-6.9932, 110.4203);
   RouteState _routeState = RouteState.empty;
 
   final List<XFile> _capturedPhotos = [];
@@ -195,6 +193,65 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       if (posFromRight > 1 && posFromRight % 3 == 1) buffer.write('.');
     }
     return 'Rp $buffer';
+  }
+
+  List<LatLng> _decodeRoute(OptimizedRouteModel route) {
+    final List<LatLng> points = [];
+    for (final leg in route.legs) {
+      if (leg.geometry.isEmpty) continue;
+      final result = PolylinePoints.decodePolyline(leg.geometry);
+      for (final point in result) {
+        points.add(LatLng(point.latitude, point.longitude));
+      }
+    }
+    return points;
+  }
+
+  OptimizedRouteModel? _optimizedRoute;
+  List<LatLng> _routePoints = [];
+  bool _loadingRoute = false;
+  Future<void> _loadOptimizedRoute() async {
+    if (_deliveryQueue.isEmpty) {
+      return;
+    }
+
+    if (_currentPosition == null) {
+      return;
+    }
+
+    setState(() {
+      _loadingRoute = true;
+    });
+
+    try {
+      final route = await RouteService.instance.findOptimizedRoute(
+        courierLatitude: _currentPosition!.latitude,
+        courierLongitude: _currentPosition!.longitude,
+        packages: _deliveryQueue,
+        hubLatitude: -6.8048,
+        hubLongitude: 110.8385,
+      );
+      final points = _decodeRoute(route);
+      print('ROUTE POINTS: ${points.length}');
+      if (!mounted) return;
+      setState(() {
+        _optimizedRoute = route;
+        _routePoints = points;
+        _loadingRoute = false;
+      });
+      print(
+        'ROUTE: ${route.totalDistanceKm} km / '
+        '${route.totalDurationMins} mins',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingRoute = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal mengambil rute: $e')));
+    }
   }
 
   @override
@@ -282,17 +339,29 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final hasPackages = dummyPackages.isNotEmpty;
-
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
             child: MapBackground(
-              center: _dummyCenter,
+              center: _currentPosition != null
+                  ? LatLng(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
+                    )
+                  : const LatLng(-6.8048, 110.8385),
               zoom: 15,
               markers: _buildMarkers(),
               controller: _animatedMapController.mapController,
+              polylines: _routePoints.isNotEmpty
+                  ? [
+                      Polyline(
+                        points: _routePoints,
+                        strokeWidth: 4,
+                        color: AppColors.primaryLight,
+                      ),
+                    ]
+                  : const [],
             ),
           ),
           Positioned.fill(
@@ -376,12 +445,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         children: [
                           RouteInfoChip(
                             label: 'Estimasi Perjalanan',
-                            value: '${dummyRouteSummary.distanceKm.toInt()} km',
+                            value: _optimizedRoute != null
+                                ? '${_optimizedRoute!.totalDistanceKm.toStringAsFixed(1)} km'
+                                : '-',
                           ),
                           const SizedBox(width: 10),
                           RouteInfoChip(
                             label: 'Durasi Perjalanan',
-                            value: dummyRouteSummary.durationLabel,
+                            value: _optimizedRoute != null
+                                ? '${_optimizedRoute!.totalDurationMins.toStringAsFixed(0)} menit'
+                                : '-',
                           ),
                         ],
                       ),
@@ -402,13 +475,22 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                       const SizedBox(height: 18),
                       PrimaryButton(
                         label: 'Mulai Optimasi Rute',
-                        onPressed: () {
-                          setState(() => _routeState = RouteState.calculating);
-                          Future.delayed(const Duration(seconds: 2), () {
-                            if (!mounted) return;
-                            setState(() => _routeState = RouteState.onRoute);
-                            _startWatchingArrival();
+                        onPressed: () async {
+                          setState(() {
+                            _routeState = RouteState.calculating;
                           });
+                          await _loadOptimizedRoute();
+                          if (!mounted) return;
+                          if (_routePoints.isEmpty) {
+                            setState(() {
+                              _routeState = RouteState.assigned;
+                            });
+                            return;
+                          }
+                          setState(() {
+                            _routeState = RouteState.onRoute;
+                          });
+                          _startWatchingArrival();
                         },
                       ),
                     ] else if (_routeState == RouteState.onRoute) ...[

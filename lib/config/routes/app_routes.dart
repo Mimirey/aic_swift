@@ -1,4 +1,5 @@
 import 'package:Swift/pages/map/map_page.dart';
+import 'package:Swift/pages/splash/splash_page.dart';
 import 'package:get/get.dart';
 import 'package:Swift/pages/login/login_page.dart';
 import 'package:Swift/pages/map/map_calculating_page.dart';
@@ -14,5 +15,6 @@ class AppPages {
     GetPage(name: AppRoutes.packageList, page: () => const PackageListPage()),
     GetPage(name: AppRoutes.map, page: () =>  MapPage()),
     GetPage(name: AppRoutes.mapCalculating, page: () => const MapCalculatingPage()),
+    GetPage(name: AppRoutes.splash, page: ()=> const SplashPage())
   ];
 }

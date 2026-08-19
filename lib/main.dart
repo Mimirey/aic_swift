@@ -27,7 +27,7 @@ class MainApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: AppThemes.lightTheme,
       themeMode: ThemeMode.light,
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.splash,
       getPages: AppPages.pages,
     );
   }
