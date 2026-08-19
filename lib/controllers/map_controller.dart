@@ -236,36 +236,38 @@ class MapPageController extends GetxController
         '  Stop ${stop.stopOrder}: ${stop.recipientName} at ${stop.latitude}, ${stop.longitude}',
       );
     }
-
     // Decode geometry dari setiap leg
     for (int i = 0; i < route.legs.length; i++) {
       final leg = route.legs[i];
+      if (leg.packageId == null) {
+        continue;
+      }
 
       print('Leg ${leg.legIndex}:');
+      print('  Package ID: ${leg.packageId}');
       print('  Package: ${leg.recipientName}');
       print('  Geometry length: ${leg.geometry.length}');
       print('  Distance: ${leg.distanceKm} km');
 
       if (leg.geometry.isEmpty) {
-        print('  WARNING: Empty geometry for leg ${leg.legIndex}');
+        // Cari stop berdasarkan packageId, bukan berdasarkan index.
+        final stop = route.stops.cast<RouteStopModel?>().firstWhere(
+          (stop) => stop?.packageId == leg.packageId,
+          orElse: () => null,
+        );
 
-        // Fallback: gunakan titik dari stops
-        if (i < route.stops.length) {
-          final stop = route.stops[i];
+        if (stop != null) {
           points.add(LatLng(stop.latitude, stop.longitude));
-          print('  Using stop point: ${stop.latitude}, ${stop.longitude}');
         }
+
         continue;
       }
 
       try {
         final decoded = PolylinePoints.decodePolyline(leg.geometry);
-        print('  Decoded ${decoded.length} points');
 
         for (final point in decoded) {
-          // Validasi koordinat
           if (point.latitude == 0 && point.longitude == 0) {
-            print('  WARNING: Skip 0,0 coordinate');
             continue;
           }
 
@@ -273,34 +275,33 @@ class MapPageController extends GetxController
               point.latitude > 90 ||
               point.longitude < -180 ||
               point.longitude > 180) {
-            print(
-              '  WARNING: Invalid coordinate: ${point.latitude}, ${point.longitude}',
-            );
             continue;
           }
 
           points.add(LatLng(point.latitude, point.longitude));
         }
 
-        // Print first and last points of this leg
         if (decoded.isNotEmpty) {
           print(
-            '  Leg start: ${decoded.first.latitude}, ${decoded.first.longitude}',
+            '  Leg start: '
+            '${decoded.first.latitude}, '
+            '${decoded.first.longitude}',
           );
           print(
-            '  Leg end: ${decoded.last.latitude}, ${decoded.last.longitude}',
+            '  Leg end: '
+            '${decoded.last.latitude}, '
+            '${decoded.last.longitude}',
           );
         }
       } catch (e) {
-        print('  ERROR decoding geometry: $e');
+        print('ERROR decoding geometry: $e');
 
-        // Fallback ke stops
-        if (i < route.stops.length) {
-          final stop = route.stops[i];
+        final stop = route.stops.cast<RouteStopModel?>().firstWhere(
+          (stop) => stop?.packageId == leg.packageId,
+          orElse: () => null,
+        );
+        if (stop != null) {
           points.add(LatLng(stop.latitude, stop.longitude));
-          print(
-            '  Using stop point as fallback: ${stop.latitude}, ${stop.longitude}',
-          );
         }
       }
     }

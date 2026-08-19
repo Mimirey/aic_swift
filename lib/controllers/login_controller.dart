@@ -42,17 +42,6 @@ class LoginController extends GetxController {
       );
       return;
     }
-
-    // Validasi email format
-    if (!GetUtils.isEmail(username)) {
-      Get.snackbar(
-        'Gagal',
-        'Format email tidak valid',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
     // Validasi password length
     if (password.length < 6) {
       Get.snackbar(
@@ -67,14 +56,12 @@ class LoginController extends GetxController {
 
     try {
       await authService.login(username: username, password: password);
-      
       // Simpan remember me preference jika dicentang
       if (rememberMe.value) {
         // TODO: Simpan ke secure storage
         // await SecureStorage.write('remember_me', 'true');
         // await SecureStorage.write('email', username);
       }
-
       Get.offAllNamed(AppRoutes.map);
     } on ApiException catch (e) {
       Get.snackbar(
