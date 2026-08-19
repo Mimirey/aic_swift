@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Theme terpusat supaya semua page & component konsisten.
-/// Ganti `fontFamily` di sini kalau mau pakai Google Fonts custom.
 class AppTheme {
   AppTheme._();
 

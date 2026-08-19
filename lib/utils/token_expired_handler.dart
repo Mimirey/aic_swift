@@ -1,5 +1,5 @@
+import 'package:Swift/core/network/api_constants.dart';
 import 'package:dio/dio.dart';
-import 'package:Swift/config/network/constant_api.dart';
 import 'package:Swift/utils/session_manager.dart';
 
 class TokenExpiredInterceptor extends Interceptor {
@@ -17,7 +17,7 @@ class TokenExpiredInterceptor extends Interceptor {
     final skipRedirect = err.requestOptions.extra["skipAuthRedirect"] == true;
 
     if (statusCode == 401) {
-      if (path == ConstantApi.login) {
+      if (path == ApiConstants.login) {
         return handler.next(err);
       }
 
