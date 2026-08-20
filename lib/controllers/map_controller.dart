@@ -15,7 +15,8 @@ import 'package:Swift/services/tracking_service.dart';
 import 'package:Swift/services/shipment_service.dart';
 import 'package:Swift/models/shipment_model.dart';
 import 'package:Swift/services/route_service.dart';
-
+import 'package:Swift/config/routes/route_names.dart';
+import 'package:Swift/core/network/api_exception.dart';
 import '../components/common/package_map_marker.dart';
 import '../components/common/user_location_marker.dart';
 
@@ -61,6 +62,8 @@ class MapPageController extends GetxController
   static const peekSize = 0.5;
   static const fullSize = 0.85;
 
+  final RxBool isUserInteracting = false.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -69,10 +72,19 @@ class MapPageController extends GetxController
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOut,
     );
+    mapController.mapEventStream.listen((event) {
+      if (event is MapEventMoveStart) {
+        isUserInteracting.value = true; // User mulai geser/zoom
+      } else if (event is MapEventMoveEnd) {
+        isUserInteracting.value = false; // User selesai geser/zoom
+      }
+    });
+
     _sheetController.addListener(_onSheetChanged);
     _loadCurrentLocation();
     _connectTracking();
     _loadShipments();
+    _startWatchingArrival();
   }
 
   @override
@@ -127,6 +139,12 @@ class MapPageController extends GetxController
       } else {
         routeState.value = RouteState.assigned;
       }
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        Get.offAllNamed(AppRoutes.login);
+        return;
+      }
+      print('LOAD SHIPMENTS ERROR: $e');
     } catch (e) {
       print('LOAD SHIPMENTS ERROR: $e');
     } finally {
@@ -209,6 +227,17 @@ class MapPageController extends GetxController
       } else {
         print('WARNING: No route points to fit');
       }
+    } on ApiException catch (e) {
+      loadingRoute.value = false;
+      if (e.statusCode == 401) {
+        Get.offAllNamed(AppRoutes.login);
+        return;
+      }
+      Get.snackbar(
+        'Error',
+        'Gagal mengambil rute: ${e.message}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } catch (e) {
       print('ERROR loading route: $e');
       loadingRoute.value = false;
@@ -424,13 +453,17 @@ class MapPageController extends GetxController
         Geolocator.getPositionStream(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
-            distanceFilter: 10,
+            distanceFilter: 1,
+            // timeLimit: Duration(seconds: 2),
           ),
         ).listen((position) {
+          currentPosition.value = position;
+          if (position.accuracy > 20) {
+            return;
+          }
           if (routeState.value != RouteState.onRoute) {
             return;
           }
-
           trackingService.sendPosition(
             lat: position.latitude,
             lon: position.longitude,
@@ -566,3 +599,5 @@ class MapPageController extends GetxController
 
   DraggableScrollableController get sheetController => _sheetController;
 }
+
+

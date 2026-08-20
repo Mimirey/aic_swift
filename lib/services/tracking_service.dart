@@ -19,7 +19,7 @@ class TrackingService {
   }
 
   final uri = Uri.parse(
-    'wss://davis-malvaceous-glenda.ngrok-free.dev'
+    'wss://msi-abcd.tailc3de19.ts.net'
     '/api/v1/ws/driver/position?token=$token',
   );
 
