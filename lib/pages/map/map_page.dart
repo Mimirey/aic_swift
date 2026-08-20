@@ -1,5 +1,5 @@
+import 'package:Swift/components/common/animated_user_marker_layer.dart';
 import 'package:Swift/components/common/slide_to_action_button.dart';
-import 'package:Swift/components/common/user_location_marker.dart';
 import 'package:Swift/components/task/route_calculating_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' hide MapController;
@@ -39,18 +39,40 @@ class MapPage extends GetView<MapPageController> {
         children: [
           // ========== MAP BACKGROUND ==========
           Positioned.fill(
-            child: Obx(() {
-              final position = controller.currentPosition.value;
-              return MapBackground(
-                center: position != null
-                    ? LatLng(position.latitude, position.longitude)
-                    : const LatLng(-6.8048, 110.8385),
-                zoom: 15,
-                markers: controller.buildMarkers(),
-                controller: controller.animatedMapController.mapController,
-                polylines: controller.getRoutePolylines(),
-              );
-            }),
+            child: Builder(
+              builder: (_) {
+                final initialPosition = controller.currentPosition.value;
+                final initialCenter = initialPosition != null
+                    ? LatLng(
+                        initialPosition.latitude,
+                        initialPosition.longitude,
+                      )
+                    : const LatLng(-6.8048, 110.8385);
+
+                return MapBackground(
+                  center: initialCenter,
+                  zoom: 15,
+                  controller: controller.animatedMapController.mapController,
+                  polylinesLayer: Obx(
+                    () => PolylineLayer(
+                      polylines: controller.getRoutePolylines(),
+                    ),
+                  ),
+                  markersLayer: Stack(
+                    children: [
+                      Obx(
+                        () => MarkerLayer(
+                          markers: controller.buildPackageMarkers(),
+                        ),
+                      ),
+                      AnimatedUserMarkerLayer(
+                        positionRx: controller.currentPosition,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
 
           // ========== OVERLAY PUTIH ==========
