@@ -35,24 +35,27 @@ class MapPage extends GetView<MapPageController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Obx(
-        () => Stack(
+      body: Obx(() {
+        // 🔥 Baca observable di sini agar Obx mendeteksi perubahan
+        final position = controller.currentPosition.value;
+        final routePoints = controller.routePoints.value;
+        final routeState = controller.routeState.value;
+
+        return Stack(
           children: [
+            // --- MAP BACKGROUND (TANPA inner Obx) ---
             Positioned.fill(
               child: MapBackground(
-                center: controller.currentPosition.value != null
-                    ? LatLng(
-                        controller.currentPosition.value!.latitude,
-                        controller.currentPosition.value!.longitude,
-                      )
+                center: position != null
+                    ? LatLng(position.latitude, position.longitude)
                     : const LatLng(-6.8048, 110.8385),
                 zoom: 15,
-                markers: controller.buildMarkers(),
+                markers: controller.buildMarkers(), // akan rebuild saat position berubah
                 controller: controller.animatedMapController.mapController,
-                polylines: controller.routePoints.isNotEmpty
+                polylines: routePoints.isNotEmpty
                     ? [
                         Polyline(
-                          points: controller.routePoints,
+                          points: routePoints,
                           strokeWidth: 6,
                           color: AppColors.primaryLight,
                           borderStrokeWidth: 3,
@@ -62,11 +65,15 @@ class MapPage extends GetView<MapPageController> {
                     : const [],
               ),
             ),
+
+            // --- OVERLAY PUTIH ---
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(color: Colors.white.withOpacity(0.15)),
               ),
             ),
+
+            // --- DATE CHIP ---
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -79,6 +86,8 @@ class MapPage extends GetView<MapPageController> {
                 ),
               ),
             ),
+
+            // --- FABs ---
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -103,6 +112,8 @@ class MapPage extends GetView<MapPageController> {
                 ),
               ),
             ),
+
+            // --- DRAGGABLE SHEET ---
             DraggableScrollableSheet(
               controller: controller.sheetController,
               initialChildSize: MapPageController.collapsedSize,
@@ -131,19 +142,25 @@ class MapPage extends GetView<MapPageController> {
                       context.horizontalPadding,
                       24,
                     ),
-                    children: [const SheetDragHandle(), _buildSheetContent()],
+                    children: [
+                      const SheetDragHandle(),
+                      _buildSheetContent(), // ini akan rebuild karena routeState berubah
+                    ],
                   ),
                 );
               },
             ),
-            if (controller.routeState.value == RouteState.calculating)
+
+            // --- OVERLAY CALCULATING ---
+            if (routeState == RouteState.calculating)
               const RouteCalculatingOverlay(),
           ],
-        ),
-      ),
+        );
+      }),
     );
   }
 
+  // ========== SHEET CONTENT ==========
   Widget _buildSheetContent() {
     switch (controller.routeState.value) {
       case RouteState.empty:
@@ -170,6 +187,7 @@ class MapPage extends GetView<MapPageController> {
     }
   }
 
+  // ========== ASSIGNED CONTENT ==========
   Widget _buildAssignedContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -213,6 +231,7 @@ class MapPage extends GetView<MapPageController> {
     );
   }
 
+  // ========== ON-ROUTE CONTENT ==========
   Widget _buildOnRouteContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,6 +286,7 @@ class MapPage extends GetView<MapPageController> {
     );
   }
 
+  // ========== VALIDATING CONTENT ==========
   Widget _buildValidatingContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,6 +353,7 @@ class MapPage extends GetView<MapPageController> {
     );
   }
 
+  // ========== ANIMATED SECTION ==========
   Widget _buildAnimatedSection({
     required bool showWhen,
     required Widget child,
@@ -348,6 +369,7 @@ class MapPage extends GetView<MapPageController> {
   }
 }
 
+// ========== MAP FAB ==========
 class _MapFab extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;

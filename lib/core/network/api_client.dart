@@ -37,6 +37,11 @@ class ApiClient {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return decoded;
     }
+
+    if (response.statusCode == 401) {
+      await TokenStorage.clearToken();
+    }
+
     throw ApiException(
       decoded['message'] as String? ??
           'Terjadi kesalahan (${response.statusCode})',
@@ -82,6 +87,10 @@ class ApiClient {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return decoded;
+    }
+
+    if (response.statusCode == 401) {
+      await TokenStorage.clearToken();
     }
 
     throw ApiException(
