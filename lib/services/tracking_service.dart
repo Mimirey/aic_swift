@@ -19,7 +19,7 @@ class TrackingService {
   }
 
   final uri = Uri.parse(
-    'wss://msi-abcd.tailc3de19.ts.net'
+    'wss://davis-malvaceous-glenda.ngrok-free.dev'
     '/api/v1/ws/driver/position?token=$token',
   );
 
@@ -28,7 +28,7 @@ class TrackingService {
     final channel = WebSocketChannel.connect(uri);
     await channel.ready;
     _channel = channel;
-    print('WebSocket CONNECTED');
+    print('WebSocket CONNECTED'); 
     _channel!.stream.listen(
       (message) {
         print('WS MESSAGE: $message');

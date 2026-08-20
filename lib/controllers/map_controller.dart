@@ -19,17 +19,25 @@ import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/core/network/api_exception.dart';
 import '../components/common/package_map_marker.dart';
 import '../components/common/user_location_marker.dart';
+import '../core/theme/app_colors.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
 
 enum RouteState { empty, assigned, calculating, onRoute, validating }
+
+class _RouteSegment {
+  final String packageId;
+  final List<LatLng> points;
+
+  _RouteSegment(this.packageId, this.points);
+}
 
 class MapPageController extends GetxController
     with GetTickerProviderStateMixin {
   final _sheetController = DraggableScrollableController();
   StreamSubscription<Position>? _positionSub;
   static const double _arrivalThresholdMeters = 50;
-
+  final RxList<_RouteSegment> _routeSegments = <_RouteSegment>[].obs;
   // Reactive state
   final RxList<PackageModel> deliveryQueue = <PackageModel>[].obs;
   final RxList<ShipmentModel> shipments = <ShipmentModel>[].obs;
@@ -74,9 +82,9 @@ class MapPageController extends GetxController
     );
     mapController.mapEventStream.listen((event) {
       if (event is MapEventMoveStart) {
-        isUserInteracting.value = true; // User mulai geser/zoom
+        isUserInteracting.value = true;
       } else if (event is MapEventMoveEnd) {
-        isUserInteracting.value = false; // User selesai geser/zoom
+        isUserInteracting.value = false;
       }
     });
 
@@ -109,6 +117,46 @@ class MapPageController extends GetxController
     }
   }
 
+  void _updateRouteSegmentsFromQueue() {
+    final existingSegments = _routeSegments
+        .where((seg) => deliveryQueue.any((pkg) => pkg.id == seg.packageId))
+        .toList();
+    existingSegments.sort((a, b) {
+      final indexA = deliveryQueue.indexWhere((pkg) => pkg.id == a.packageId);
+      final indexB = deliveryQueue.indexWhere((pkg) => pkg.id == b.packageId);
+      return indexA.compareTo(indexB);
+    });
+
+    _routeSegments.value = existingSegments;
+  }
+
+  List<Polyline> getRoutePolylines() {
+    if (_routeSegments.isEmpty) return [];
+    final polylines = <Polyline>[];
+    for (final seg in _routeSegments) {
+      final index = deliveryQueue.indexWhere((pkg) => pkg.id == seg.packageId);
+
+      double opacity;
+      if (index == 0) {
+        opacity = 1.0;
+      } else if (index == 1) {
+        opacity = 0.8;
+      } else {
+        opacity = 0.5;
+      }
+      polylines.add(
+        Polyline(
+          points: seg.points,
+          strokeWidth: 6,
+          color: AppColors.primaryLight.withOpacity(opacity),
+          borderStrokeWidth: 3,
+          borderColor: Colors.white.withOpacity(opacity),
+        ),
+      );
+    }
+    return polylines;
+  }
+
   Future<void> _connectTracking() async {
     try {
       await trackingService.connect();
@@ -130,7 +178,6 @@ class MapPageController extends GetxController
       isLoadingShipments.value = true;
       final loadedShipments = await shipmentService.getShipments();
       final packages = loadedShipments.map(_shipmentToPackage).toList();
-
       shipments.value = loadedShipments;
       deliveryQueue.value = packages;
 
@@ -198,7 +245,6 @@ class MapPageController extends GetxController
         'Courier position: ${currentPosition.value!.latitude}, ${currentPosition.value!.longitude}',
       );
       print('Packages to deliver: ${deliveryQueue.length}');
-
       final route = await routeService.findOptimizedRoute(
         courierLatitude: currentPosition.value!.latitude,
         courierLongitude: currentPosition.value!.longitude,
@@ -207,20 +253,78 @@ class MapPageController extends GetxController
         hubLongitude: 110.8385,
       );
 
-      print('Route received:');
-      print('  Status: ${route.status}');
-      print('  Total legs: ${route.totalLegs}');
-      print('  Total stops: ${route.stops.length}');
-      print('  Total distance: ${route.totalDistanceKm} km');
-      print('  Total duration: ${route.totalDurationMins} mins');
+      final stopPackageIds = route.stops
+          .map((stop) => stop.packageId?.toString())
+          .whereType<String>() // filter yang null
+          .toList();
+
+      if (stopPackageIds.isNotEmpty) {
+        final sortedQueue = <PackageModel>[];
+        for (final id in stopPackageIds) {
+          final found = deliveryQueue.firstWhereOrNull((pkg) => pkg.id == id);
+          if (found != null) {
+            sortedQueue.add(found);
+          }
+        }
+        for (final pkg in deliveryQueue) {
+          if (!sortedQueue.contains(pkg)) {
+            sortedQueue.add(pkg);
+          }
+        }
+        deliveryQueue.value = sortedQueue;
+        for (int i = 0; i < deliveryQueue.length; i++) {
+          print(
+            '  Stop $i: ${deliveryQueue[i].customerName} (${deliveryQueue[i].id})',
+          );
+        }
+      }
+      final segments = <_RouteSegment>[];
+      for (final leg in route.legs) {
+        if (leg.packageId == null) continue;
+        final decoded = PolylinePoints.decodePolyline(leg.geometry);
+        final pointsLeg = decoded
+            .map((p) => LatLng(p.latitude, p.longitude))
+            .toList();
+
+        if (pointsLeg.isNotEmpty) {
+          segments.add(
+            _RouteSegment(leg.packageId!.toString(), pointsLeg),
+          ); 
+        }
+      }
+      if (segments.isEmpty && route.stops.isNotEmpty) {
+        for (final stop in route.stops) {
+          if (stop.packageId != null) {
+            segments.add(
+              _RouteSegment(stop.packageId!.toString(), [
+                LatLng(stop.latitude, stop.longitude),
+              ]),
+            );
+          }
+        }
+      }
+      _routeSegments.value = segments;
 
       final points = _decodeRoute(route);
+      if (currentPosition.value != null && points.isNotEmpty) {
+        final userLatLng = LatLng(
+          currentPosition.value!.latitude,
+          currentPosition.value!.longitude,
+        );
+        final distance = Distance().as(
+          LengthUnit.Meter,
+          userLatLng,
+          points.first,
+        );
+        if (distance > 10) {
+          points.insert(0, userLatLng);
+        }
+      }
 
       optimizedRoute.value = route;
       routePoints.value = points;
       loadingRoute.value = false;
 
-      // Auto-fit map ke route
       if (points.isNotEmpty) {
         print('Fitting map to route...');
         _fitMapToRoute(points);
@@ -251,62 +355,39 @@ class MapPageController extends GetxController
 
   List<LatLng> _decodeRoute(OptimizedRouteModel route) {
     final List<LatLng> points = [];
-
-    print('=== DECODE ROUTE DEBUG ===');
-    print('Route status: ${route.status}');
-    print('Total legs: ${route.totalLegs}');
-    print('Legs count: ${route.legs.length}');
-    print('Stops count: ${route.stops.length}');
-
-    // Print semua stops untuk verifikasi
-    print('Stops:');
     for (final stop in route.stops) {
       print(
         '  Stop ${stop.stopOrder}: ${stop.recipientName} at ${stop.latitude}, ${stop.longitude}',
       );
     }
-    // Decode geometry dari setiap leg
     for (int i = 0; i < route.legs.length; i++) {
       final leg = route.legs[i];
       if (leg.packageId == null) {
         continue;
       }
-
-      print('Leg ${leg.legIndex}:');
-      print('  Package ID: ${leg.packageId}');
-      print('  Package: ${leg.recipientName}');
-      print('  Geometry length: ${leg.geometry.length}');
-      print('  Distance: ${leg.distanceKm} km');
-
       if (leg.geometry.isEmpty) {
-        // Cari stop berdasarkan packageId, bukan berdasarkan index.
         final stop = route.stops.cast<RouteStopModel?>().firstWhere(
           (stop) => stop?.packageId == leg.packageId,
           orElse: () => null,
         );
-
         if (stop != null) {
           points.add(LatLng(stop.latitude, stop.longitude));
         }
-
         continue;
       }
 
       try {
         final decoded = PolylinePoints.decodePolyline(leg.geometry);
-
         for (final point in decoded) {
           if (point.latitude == 0 && point.longitude == 0) {
             continue;
           }
-
           if (point.latitude < -90 ||
               point.latitude > 90 ||
               point.longitude < -180 ||
               point.longitude > 180) {
             continue;
           }
-
           points.add(LatLng(point.latitude, point.longitude));
         }
 
@@ -334,12 +415,10 @@ class MapPageController extends GetxController
         }
       }
     }
-    // Jika tidak ada points dari legs, gunakan stops
     if (points.isEmpty && route.stops.isNotEmpty) {
       print('No points from legs, using stops...');
       for (final stop in route.stops) {
         points.add(LatLng(stop.latitude, stop.longitude));
-        print('  Stop point: ${stop.latitude}, ${stop.longitude}');
       }
     }
     print('Total decoded points: ${points.length}');
@@ -356,7 +435,6 @@ class MapPageController extends GetxController
   void _fitMapToRoute(List<LatLng> points) {
     if (points.isEmpty) return;
 
-    // Hitung bounds
     double minLat = points.first.latitude;
     double maxLat = points.first.latitude;
     double minLon = points.first.longitude;
@@ -372,7 +450,6 @@ class MapPageController extends GetxController
     final centerLat = (minLat + maxLat) / 2;
     final centerLon = (minLon + maxLon) / 2;
 
-    // Hitung zoom level
     final latDiff = maxLat - minLat;
     final lonDiff = maxLon - minLon;
     final maxDiff = latDiff > lonDiff ? latDiff : lonDiff;
@@ -389,13 +466,6 @@ class MapPageController extends GetxController
     else if (maxDiff > 0.01)
       zoom = 14;
 
-    print('=== FIT MAP ===');
-    print('Bounds: $minLat, $minLon to $maxLat, $maxLon');
-    print('Center: $centerLat, $centerLon');
-    print('Zoom: $zoom');
-    print('=== END FIT ===');
-
-    // Animate ke center route
     Future.delayed(const Duration(milliseconds: 500), () {
       if (routeState.value == RouteState.onRoute ||
           routeState.value == RouteState.calculating) {
@@ -417,11 +487,9 @@ class MapPageController extends GetxController
       final curr = points[i];
       final next = points[i + 1];
 
-      // Hitung jarak antar titik
       final dist1 = Distance().as(LengthUnit.Meter, prev, curr);
       final dist2 = Distance().as(LengthUnit.Meter, curr, next);
 
-      // Jika jarak terlalu jauh (> 100km), skip titik ini
       if (dist1 > 100000 || dist2 > 100000) {
         print('SKIP outlier point: $curr (dist1: $dist1, dist2: $dist2)');
         continue;
@@ -458,6 +526,17 @@ class MapPageController extends GetxController
           ),
         ).listen((position) {
           currentPosition.value = position;
+          // if (routeState.value == RouteState.onRoute &&
+          //     !isUserInteracting.value) {
+          //   try {
+          //     animatedMapController.animateTo(
+          //       dest: LatLng(position.latitude, position.longitude),
+          //       zoom: 16,
+          //     );
+          //   } catch (e) {
+          //     print('Auto-follow error: $e');
+          //   }
+          // }
           if (position.accuracy > 20) {
             return;
           }
@@ -498,6 +577,7 @@ class MapPageController extends GetxController
     if (currentPackage == null) return;
 
     deliveryQueue.removeAt(0);
+    _updateRouteSegmentsFromQueue();
     capturedPhotos.clear();
     routeState.value = deliveryQueue.isEmpty
         ? RouteState.empty
@@ -599,5 +679,3 @@ class MapPageController extends GetxController
 
   DraggableScrollableController get sheetController => _sheetController;
 }
-
-
