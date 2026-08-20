@@ -35,128 +35,118 @@ class MapPage extends GetView<MapPageController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Obx(() {
-        // 🔥 Baca observable di sini agar Obx mendeteksi perubahan
-        final position = controller.currentPosition.value;
-        final routePoints = controller.routePoints.value;
-        final routeState = controller.routeState.value;
-
-        return Stack(
-          children: [
-            // --- MAP BACKGROUND (TANPA inner Obx) ---
-            Positioned.fill(
-              child: MapBackground(
+      body: Stack(
+        children: [
+          // ========== MAP BACKGROUND ==========
+          Positioned.fill(
+            child: Obx(() {
+              final position = controller.currentPosition.value;
+              return MapBackground(
                 center: position != null
                     ? LatLng(position.latitude, position.longitude)
                     : const LatLng(-6.8048, 110.8385),
                 zoom: 15,
-                markers: controller.buildMarkers(), // akan rebuild saat position berubah
+                markers: controller.buildMarkers(),
                 controller: controller.animatedMapController.mapController,
-                polylines: routePoints.isNotEmpty
-                    ? [
-                        Polyline(
-                          points: routePoints,
-                          strokeWidth: 6,
-                          color: AppColors.primaryLight,
-                          borderStrokeWidth: 3,
-                          borderColor: Colors.white,
-                        ),
-                      ]
-                    : const [],
+                polylines: controller.getRoutePolylines(),
+              );
+            }),
+          ),
+
+          // ========== OVERLAY PUTIH ==========
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(color: Colors.white.withOpacity(0.15)),
+            ),
+          ),
+
+          // ========== DATE CHIP ==========
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.horizontalPadding,
+                vertical: 8,
+              ),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: DateChip(date: DateFormatter.fullIndo(DateTime.now())),
               ),
             ),
+          ),
 
-            // --- OVERLAY PUTIH ---
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(color: Colors.white.withOpacity(0.15)),
+          // ========== FABs ==========
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: context.horizontalPadding,
+                top: 90,
               ),
-            ),
-
-            // --- DATE CHIP ---
-            SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.horizontalPadding,
-                  vertical: 8,
-                ),
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: DateChip(date: DateFormatter.fullIndo(DateTime.now())),
-                ),
-              ),
-            ),
-
-            // --- FABs ---
-            SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  right: context.horizontalPadding,
-                  top: 90,
-                ),
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Column(
-                    children: [
-                      _MapFab(
-                        icon: Icons.inventory_2_rounded,
-                        onTap: () => Get.toNamed(AppRoutes.packageList),
-                      ),
-                      const SizedBox(height: 10),
-                      _MapFab(
-                        icon: Icons.my_location_rounded,
-                        onTap: controller.handleRelocate,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // --- DRAGGABLE SHEET ---
-            DraggableScrollableSheet(
-              controller: controller.sheetController,
-              initialChildSize: MapPageController.collapsedSize,
-              minChildSize: MapPageController.collapsedSize,
-              maxChildSize: MapPageController.fullSize,
-              snap: true,
-              snapSizes: [
-                MapPageController.collapsedSize,
-                MapPageController.peekSize,
-                MapPageController.fullSize,
-              ],
-              builder: (context, scrollController) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(28),
-                      topRight: Radius.circular(28),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Column(
+                  children: [
+                    _MapFab(
+                      icon: Icons.inventory_2_rounded,
+                      onTap: () => Get.toNamed(AppRoutes.packageList),
                     ),
-                  ),
-                  child: ListView(
-                    controller: scrollController,
-                    padding: EdgeInsets.fromLTRB(
-                      context.horizontalPadding,
-                      0,
-                      context.horizontalPadding,
-                      24,
+                    const SizedBox(height: 10),
+                    _MapFab(
+                      icon: Icons.my_location_rounded,
+                      onTap: controller.handleRelocate,
                     ),
-                    children: [
-                      const SheetDragHandle(),
-                      _buildSheetContent(), // ini akan rebuild karena routeState berubah
-                    ],
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
+          ),
 
-            // --- OVERLAY CALCULATING ---
-            if (routeState == RouteState.calculating)
-              const RouteCalculatingOverlay(),
-          ],
-        );
-      }),
+          // ========== DRAGGABLE SHEET ==========
+          DraggableScrollableSheet(
+            controller: controller.sheetController,
+            initialChildSize: MapPageController.collapsedSize,
+            minChildSize: MapPageController.collapsedSize,
+            maxChildSize: MapPageController.fullSize,
+            snap: true,
+            snapSizes: [
+              MapPageController.collapsedSize,
+              MapPageController.peekSize,
+              MapPageController.fullSize,
+            ],
+            builder: (context, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                ),
+                child: ListView(
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    context.horizontalPadding,
+                    0,
+                    context.horizontalPadding,
+                    24,
+                  ),
+                  children: [
+                    const SheetDragHandle(),
+                    Obx(() => _buildSheetContent()),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          // ========== OVERLAY CALCULATING ==========
+          Obx(() {
+            if (controller.routeState.value == RouteState.calculating) {
+              return const RouteCalculatingOverlay();
+            }
+            return const SizedBox.shrink();
+          }),
+        ],
+      ),
     );
   }
 
@@ -321,7 +311,7 @@ class MapPage extends GetView<MapPageController> {
         const SizedBox(height: 10),
         Obx(
           () => PhotoPreviewStrip(
-            photos: controller.capturedPhotos,
+            photos: controller.capturedPhotos.toList(),
             onTapPhoto: (index) => showPhotoViewer(
               Get.context!,
               controller.capturedPhotos,
@@ -375,7 +365,6 @@ class _MapFab extends StatelessWidget {
   final VoidCallback onTap;
 
   const _MapFab({required this.icon, required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return Material(
