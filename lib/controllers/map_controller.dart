@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:Swift/controllers/navigation_controller.dart';
 import 'package:Swift/core/utils/location_service.dart';
 import 'package:Swift/core/utils/whatsapp_launcher.dart';
 import 'package:flutter/material.dart';
@@ -66,6 +67,10 @@ class MapPageController extends GetxController
   TaskSheetStage get currentStage => stage.value;
   RouteState get currentRouteState => routeState.value;
 
+  late final NavigationController navController;
+  DateTime? _lastNavSentAt;
+  static const _navMinInterval = Duration(seconds: 3);
+
   static const collapsedSize = 0.18;
   static const peekSize = 0.5;
   static const fullSize = 0.85;
@@ -75,6 +80,10 @@ class MapPageController extends GetxController
   @override
   void onInit() {
     super.onInit();
+    if (!Get.isRegistered<NavigationController>()) {
+      Get.put(NavigationController());
+    }
+    navController = Get.find<NavigationController>();
     animatedMapController = AnimatedMapController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -86,6 +95,13 @@ class MapPageController extends GetxController
       } else if (event is MapEventMoveEnd) {
         isUserInteracting.value = false;
       }
+    });
+    ever(navController.activePolyline, (encoded) {
+      if (encoded == null) return;
+      final decoded = PolylinePoints.decodePolyline(encoded);
+      routePoints.value = decoded
+          .map((p) => LatLng(p.latitude, p.longitude))
+          .toList();
     });
 
     _sheetController.addListener(_onSheetChanged);
@@ -102,6 +118,7 @@ class MapPageController extends GetxController
     _sheetController.dispose();
     animatedMapController.dispose();
     trackingService.disconnect();
+    navController.stopNavigation();
     super.onClose();
   }
 
@@ -236,15 +253,9 @@ class MapPageController extends GetxController
       print('ERROR: Cannot load route - queue empty or position null');
       return;
     }
-
     loadingRoute.value = true;
 
     try {
-      print('=== LOADING OPTIMIZED ROUTE ===');
-      print(
-        'Courier position: ${currentPosition.value!.latitude}, ${currentPosition.value!.longitude}',
-      );
-      print('Packages to deliver: ${deliveryQueue.length}');
       final route = await routeService.findOptimizedRoute(
         courierLatitude: currentPosition.value!.latitude,
         courierLongitude: currentPosition.value!.longitude,
@@ -287,9 +298,7 @@ class MapPageController extends GetxController
             .toList();
 
         if (pointsLeg.isNotEmpty) {
-          segments.add(
-            _RouteSegment(leg.packageId!.toString(), pointsLeg),
-          ); 
+          segments.add(_RouteSegment(leg.packageId!.toString(), pointsLeg));
         }
       }
       if (segments.isEmpty && route.stops.isNotEmpty) {
@@ -513,6 +522,17 @@ class MapPageController extends GetxController
 
     routeState.value = RouteState.onRoute;
     _startWatchingArrival();
+
+    final routeId =
+        optimizedRoute.value?.routeId; 
+    if (routeId != null) {
+      final connected = await navController.connect();
+      if (connected) {
+        navController.beginNavigation(routeId);
+      } else {
+        print('NAV: gagal connect ke navigation service');
+      }
+    }
   }
 
   void _startWatchingArrival() {
@@ -522,21 +542,9 @@ class MapPageController extends GetxController
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
             distanceFilter: 1,
-            // timeLimit: Duration(seconds: 2),
           ),
         ).listen((position) {
           currentPosition.value = position;
-          // if (routeState.value == RouteState.onRoute &&
-          //     !isUserInteracting.value) {
-          //   try {
-          //     animatedMapController.animateTo(
-          //       dest: LatLng(position.latitude, position.longitude),
-          //       zoom: 16,
-          //     );
-          //   } catch (e) {
-          //     print('Auto-follow error: $e');
-          //   }
-          // }
           if (position.accuracy > 20) {
             return;
           }
@@ -549,6 +557,22 @@ class MapPageController extends GetxController
             bearing: position.heading,
             speed: position.speed,
           );
+
+          final routeId = optimizedRoute.value?.routeId;
+          if (navController.isNavigating.value && routeId != null) {
+            final now = DateTime.now();
+            if (_lastNavSentAt == null ||
+                now.difference(_lastNavSentAt!) >= _navMinInterval) {
+              _lastNavSentAt = now;
+              navController.sendLocationUpdate(
+                lat: position.latitude,
+                lng: position.longitude,
+                bearing: position.heading,
+                speed: position.speed,
+                currentRouteId: routeId,
+              );
+            }
+          }
 
           final distance = distanceToTargetInMeters(
             position,

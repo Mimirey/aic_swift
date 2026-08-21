@@ -35,14 +35,11 @@ class RouteService {
         'latitude': courierLatitude,
         'longitude': courierLongitude,
       },
-
       'deliveries': deliveries,
-
       'hub_origin': {
         'latitude': hubLatitude,
         'longitude': hubLongitude,
       },
-
       'mode': 'motorcycle',
       'last_mile_precision': true,
       'dynamic_rerouting': false,
