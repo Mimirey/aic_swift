@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:Swift/controllers/navigation_controller.dart';
+import 'dart:io';
 import 'package:Swift/core/utils/location_service.dart';
 import 'package:Swift/core/utils/whatsapp_launcher.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,6 @@ import 'package:Swift/services/route_service.dart';
 import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/core/network/api_exception.dart';
 import '../components/common/package_map_marker.dart';
-import '../components/common/user_location_marker.dart';
 import '../core/theme/app_colors.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
@@ -59,6 +59,14 @@ class MapPageController extends GetxController
   // Map controllers
   final mapController = MapController();
   late final AnimatedMapController animatedMapController;
+
+  Position? _lastEmittedPosition;
+  DateTime? _lastEmittedTime;
+  bool _hasCenteredOnUser = false;
+
+  static const double _vehicleSpeedThresholdKmh = 8.0;
+  static const double _vehicleSpeedThresholdMps =
+      _vehicleSpeedThresholdKmh / 3.6;
 
   // Getters
   PackageModel? get currentPackage =>
@@ -109,6 +117,7 @@ class MapPageController extends GetxController
     _connectTracking();
     _loadShipments();
     _startWatchingArrival();
+    _centerOnFirstFix();
   }
 
   @override
@@ -120,6 +129,39 @@ class MapPageController extends GetxController
     trackingService.disconnect();
     navController.stopNavigation();
     super.onClose();
+  }
+
+  double _dynamicMinDistance(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return 1.0;
+    }
+    final scaled = speedMps * 1.5;
+    return scaled.clamp(3.0, 15.0);
+  }
+
+  Duration _dynamicMaxInterval(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return const Duration(seconds: 1);
+    }
+    return const Duration(seconds: 2);
+  }
+
+  bool _shouldEmitUpdate(Position newPosition) {
+    if (_lastEmittedPosition == null || _lastEmittedTime == null) return true;
+
+    final distance = Distance().as(
+      LengthUnit.Meter,
+      LatLng(_lastEmittedPosition!.latitude, _lastEmittedPosition!.longitude),
+      LatLng(newPosition.latitude, newPosition.longitude),
+    );
+    final elapsed = DateTime.now().difference(_lastEmittedTime!);
+
+    final speed = newPosition.speed < 0 ? 0.0 : newPosition.speed;
+
+    final minDistance = _dynamicMinDistance(speed);
+    final maxInterval = _dynamicMaxInterval(speed);
+
+    return distance >= minDistance || elapsed >= maxInterval;
   }
 
   void _onSheetChanged() {
@@ -188,6 +230,22 @@ class MapPageController extends GetxController
     if (position != null) {
       currentPosition.value = position;
     }
+  }
+
+  void _centerOnFirstFix() {
+    ever<Position?>(currentPosition, (position) {
+      if (position == null || _hasCenteredOnUser) return;
+      _hasCenteredOnUser = true;
+      if (isUserInteracting.value) return;
+      try {
+        animatedMapController.mapController.move(
+          LatLng(position.latitude, position.longitude),
+          15,
+        );
+      } catch (e) {
+        print('Initial center error: $e');
+      }
+    });
   }
 
   Future<void> _loadShipments() async {
@@ -537,54 +595,63 @@ class MapPageController extends GetxController
 
   void _startWatchingArrival() {
     _positionSub?.cancel();
-    _positionSub =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
+
+    final locationSettings = Platform.isAndroid
+        ? AndroidSettings(
             accuracy: LocationAccuracy.high,
-            distanceFilter: 1,
-          ),
-        ).listen((position) {
-          currentPosition.value = position;
-          if (position.accuracy > 20) {
-            return;
-          }
-          if (routeState.value != RouteState.onRoute) {
-            return;
-          }
-          trackingService.sendPosition(
-            lat: position.latitude,
-            lon: position.longitude,
-            bearing: position.heading,
-            speed: position.speed,
+            distanceFilter: 0,
+            intervalDuration: const Duration(seconds: 1),
+          )
+        : AppleSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 0,
+            activityType: ActivityType.fitness,
+            pauseLocationUpdatesAutomatically: false,
           );
 
-          final routeId = optimizedRoute.value?.routeId;
-          if (navController.isNavigating.value && routeId != null) {
-            final now = DateTime.now();
-            if (_lastNavSentAt == null ||
-                now.difference(_lastNavSentAt!) >= _navMinInterval) {
-              _lastNavSentAt = now;
-              navController.sendLocationUpdate(
-                lat: position.latitude,
-                lng: position.longitude,
-                bearing: position.heading,
-                speed: position.speed,
-                currentRouteId: routeId,
-              );
+    _positionSub =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (position) {
+            currentPosition.value = position;
+
+            if (!_shouldEmitUpdate(position)) return;
+            _lastEmittedPosition = position;
+            _lastEmittedTime = DateTime.now();
+
+            if (!isUserInteracting.value &&
+                routeState.value == RouteState.onRoute) {
+              try {
+                animatedMapController.animateTo(
+                  dest: LatLng(position.latitude, position.longitude),
+                  zoom: 16,
+                );
+              } catch (e) {
+                print('Auto-follow error: $e');
+              }
             }
-          }
 
-          final distance = distanceToTargetInMeters(
-            position,
-            currentPackage!.latitude,
-            currentPackage!.longitude,
-          );
+            if (position.accuracy > 20) return;
+            if (routeState.value != RouteState.onRoute) return;
 
-          if (distance <= _arrivalThresholdMeters) {
-            routeState.value = RouteState.validating;
-            _positionSub?.cancel();
-          }
-        });
+            trackingService.sendPosition(
+              lat: position.latitude,
+              lon: position.longitude,
+              bearing: position.heading,
+              speed: position.speed,
+            );
+
+            final distance = distanceToTargetInMeters(
+              position,
+              currentPackage!.latitude,
+              currentPackage!.longitude,
+            );
+
+            if (distance <= _arrivalThresholdMeters) {
+              routeState.value = RouteState.validating;
+              _positionSub?.cancel();
+            }
+          },
+        );
   }
 
   Future<void> handleCapturePhoto() async {
@@ -635,10 +702,11 @@ class MapPageController extends GetxController
     return 'Rp $buffer';
   }
 
-  List<Marker> buildMarkers() {
+  /// Marker paket + start/end route. Tidak termasuk marker user
+  /// (user marker ditangani AnimatedUserMarkerLayer secara terpisah).
+  List<Marker> buildPackageMarkers() {
     final packageMarkers = deliveryQueue.map((pkg) {
       final isActive = currentPackage != null && pkg.id == currentPackage!.id;
-
       return Marker(
         point: LatLng(pkg.latitude, pkg.longitude),
         width: isActive ? 34 : 16,
@@ -647,23 +715,7 @@ class MapPageController extends GetxController
       );
     }).toList();
 
-    if (currentPosition.value != null) {
-      packageMarkers.add(
-        Marker(
-          point: LatLng(
-            currentPosition.value!.latitude,
-            currentPosition.value!.longitude,
-          ),
-          width: 40,
-          height: 40,
-          child: const UserLocationMarker(),
-        ),
-      );
-    }
-
-    // Debug: Tambahkan marker untuk titik awal dan akhir route
     if (routePoints.isNotEmpty) {
-      // Marker titik awal route (hijau)
       packageMarkers.add(
         Marker(
           point: routePoints.first,
@@ -680,7 +732,6 @@ class MapPageController extends GetxController
         ),
       );
 
-      // Marker titik akhir route (merah)
       packageMarkers.add(
         Marker(
           point: routePoints.last,
