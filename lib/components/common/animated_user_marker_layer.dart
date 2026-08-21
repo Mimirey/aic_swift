@@ -22,8 +22,12 @@ class _AnimatedUserMarkerLayerState extends State<AnimatedUserMarkerLayer>
   static const double _movingSpeedMps = 1.5;
   static const Duration _compassThrottle = Duration(milliseconds: 100);
 
+  static const Duration _minAnimDuration = Duration(milliseconds: 250);
+  static const Duration _maxAnimDuration = Duration(milliseconds: 1200);
+
   late final AnimationController _controller;
   LatLng? _lastPosition;
+  DateTime? _lastPositionTime;
   double? _lastHeading;
   double _accumulatedTurns = 0;
   double? _lastSpeed;
@@ -45,6 +49,7 @@ class _AnimatedUserMarkerLayerState extends State<AnimatedUserMarkerLayer>
     final initial = widget.positionRx.value;
     if (initial != null) {
       _lastPosition = LatLng(initial.latitude, initial.longitude);
+      _lastPositionTime = DateTime.now();
       _lastSpeed = initial.speed;
     }
 
@@ -55,18 +60,13 @@ class _AnimatedUserMarkerLayerState extends State<AnimatedUserMarkerLayer>
   void _startCompass() {
     final events = FlutterCompass.events;
     if (events == null) return;
-    _compassSub = events.listen(
-      (event) {
-        final heading = event.heading;
-        if (heading == null) return;
-        _hasCompass = true;
-        _compassHeading = heading;
-        _onCompassHeading(heading);
-      },
-      onError: (Object _) {
-        // Compass tidak tersedia (mis. sensor/permission) -> arrow disembunyikan.
-      },
-    );
+    _compassSub = events.listen((event) {
+      final heading = event.heading;
+      if (heading == null) return;
+      _hasCompass = true;
+      _compassHeading = heading;
+      _onCompassHeading(heading);
+    }, onError: (Object _) {});
   }
 
   void _onCompassHeading(double heading) {
@@ -89,6 +89,20 @@ class _AnimatedUserMarkerLayerState extends State<AnimatedUserMarkerLayer>
     final from = _lastPosition ?? newLatLng;
     _lastSpeed = newPos.speed;
 
+    final now = DateTime.now();
+    Duration animDuration = _maxAnimDuration;
+    if (_lastPositionTime != null) {
+      final elapsed = now.difference(_lastPositionTime!);
+      if (elapsed < _minAnimDuration) {
+        animDuration = _minAnimDuration;
+      } else if (elapsed > _maxAnimDuration) {
+        animDuration = _maxAnimDuration;
+      } else {
+        animDuration = elapsed;
+      }
+    }
+    _lastPositionTime = now;
+
     final moving = newPos.speed > _movingSpeedMps;
     double? heading;
     if (moving) {
@@ -105,6 +119,7 @@ class _AnimatedUserMarkerLayerState extends State<AnimatedUserMarkerLayer>
 
     _tween = LatLngTween(begin: from, end: newLatLng);
     _lastPosition = newLatLng;
+    _controller.duration = animDuration;
 
     if (mounted) setState(() {});
 

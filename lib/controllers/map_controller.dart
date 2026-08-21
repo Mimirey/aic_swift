@@ -63,6 +63,10 @@ class MapPageController extends GetxController
   DateTime? _lastEmittedTime;
   bool _hasCenteredOnUser = false;
 
+  static const double _vehicleSpeedThresholdKmh = 8.0;
+  static const double _vehicleSpeedThresholdMps =
+      _vehicleSpeedThresholdKmh / 3.6;
+
   // Getters
   PackageModel? get currentPackage =>
       deliveryQueue.isNotEmpty ? deliveryQueue.first : null;
@@ -110,6 +114,21 @@ class MapPageController extends GetxController
     super.onClose();
   }
 
+  double _dynamicMinDistance(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return 1.0;
+    }
+    final scaled = speedMps * 1.5;
+    return scaled.clamp(3.0, 15.0);
+  }
+
+  Duration _dynamicMaxInterval(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return const Duration(seconds: 1);
+    }
+    return const Duration(seconds: 2);
+  }
+
   bool _shouldEmitUpdate(Position newPosition) {
     if (_lastEmittedPosition == null || _lastEmittedTime == null) return true;
 
@@ -120,13 +139,12 @@ class MapPageController extends GetxController
     );
     final elapsed = DateTime.now().difference(_lastEmittedTime!);
 
-    if (newPosition.speed > 0.5) {
-      // Bergerak (jalan kaki / kendaraan) -> update sering
-      return distance >= 1 || elapsed >= const Duration(seconds: 1);
-    }
+    final speed = newPosition.speed < 0 ? 0.0 : newPosition.speed;
 
-    // Diam -> update jarang (hemat baterai & cegah wiggle noise GPS)
-    return distance >= 10 || elapsed >= const Duration(seconds: 10);
+    final minDistance = _dynamicMinDistance(speed);
+    final maxInterval = _dynamicMaxInterval(speed);
+
+    return distance >= minDistance || elapsed >= maxInterval;
   }
 
   void _onSheetChanged() {

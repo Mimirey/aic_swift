@@ -13,7 +13,6 @@ import 'package:Swift/components/task/recipient_note_card.dart';
 import 'package:Swift/components/task/next_package_list.dart';
 import 'package:Swift/data/dummy_next_packages.dart';
 import 'package:Swift/components/buttons/primary_button.dart';
-import 'package:Swift/components/common/package_map_marker.dart';
 import 'package:Swift/components/task/call_recipient_button.dart';
 import 'package:Swift/components/task/current_package_preview.dart';
 import 'package:Swift/components/task/package_photo_picker.dart';
