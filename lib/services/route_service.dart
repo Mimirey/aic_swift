@@ -42,7 +42,7 @@ class RouteService {
       },
       'mode': 'motorcycle',
       'last_mile_precision': true,
-      'dynamic_rerouting': false,
+      'dynamic_rerouting': true,
       'skip_traffic': true,
       'return_to_hub': true,
     };

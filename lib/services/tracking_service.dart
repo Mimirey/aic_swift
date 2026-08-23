@@ -14,7 +14,7 @@ class TrackingService {
     throw Exception('Token tidak ditemukan');
   }
   final uri = Uri.parse(
-    'wss://msi-abcd.tailc3de19.ts.net'
+    'wss://linking-backgrounds-processor-situation.trycloudflare.com'
     '/api/v1/ws/driver/position?token=$token',
   );
   print('Connecting WebSocket...');

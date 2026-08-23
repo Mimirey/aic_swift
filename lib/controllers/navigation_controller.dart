@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:Swift/services/navigation_service.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +11,7 @@ class NavigationController extends GetxController {
 
   final RxBool isConnected = false.obs;
   final RxBool isNavigating = false.obs;
-  final RxnString currentRouteId = RxnString();
+  final RxnInt currentRouteId = RxnInt();
 
   final RxDouble remainingDistanceM = 0.0.obs;
   final RxDouble remainingTimeS = 0.0.obs;
@@ -31,7 +32,6 @@ class NavigationController extends GetxController {
 
   void _handleMessage(Map<String, dynamic> msg) {
     final type = msg['type'] as String?;
-
     switch (type) {
       case 'ack':
         if (msg.containsKey('polyline')) {
@@ -86,18 +86,19 @@ class NavigationController extends GetxController {
     }
   }
 
-  void beginNavigation(String routeId, {int legIndex = 0}) {
-    currentRouteId.value = routeId;
-    _navService.startNavigation(routeId: routeId, legIndex: legIndex);
-    isNavigating.value = true;
-  }
+  void beginNavigation(int routeId, {int legIndex = 0}) {
+  developer.log('beginNavigation dipanggil dengan routeId=$routeId', name: 'NavController'); // tambahan
+  currentRouteId.value = routeId;
+  _navService.startNavigation(routeId: routeId, legIndex: legIndex);
+  isNavigating.value = true;
+}
 
   void sendLocationUpdate({
     required double lat,
     required double lng,
     required double bearing,
     required double speed,
-    required String currentRouteId,
+    required int currentRouteId,
   }) {
     if (!isNavigating.value) return;
     _navService.sendLocationUpdate(

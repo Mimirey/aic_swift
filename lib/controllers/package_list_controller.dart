@@ -7,7 +7,6 @@ import 'package:Swift/services/shipment_service.dart';
 class PackageListController extends GetxController {
   final searchController = TextEditingController();
   final shipmentService = ShipmentService.instance;
-
   // Reactive state
   final RxList<PackageModel> packages = <PackageModel>[].obs;
   final RxList<PackageModel> filteredPackages = <PackageModel>[].obs;
@@ -46,7 +45,6 @@ class PackageListController extends GetxController {
     }
   }
 
-  // Ubah return type menjadi Future<void>
   Future<void> refreshPackages() async {
     await _loadPackages();
   }

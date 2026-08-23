@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-
+import 'dart:developer' as developer;
+import 'dart:ffi';
 import 'package:Swift/core/utils/token_storage.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -21,7 +22,7 @@ class NavigationService {
       throw Exception('Token tidak ditemukan');
     }
     final uri = Uri.parse(
-      'wss://msi-abcd.tailc3de19.ts.net'
+      'wss://linking-backgrounds-processor-situation.trycloudflare.com'
       '/api/v1/ws/navigation?token=$token',
     );
     try {
@@ -55,7 +56,8 @@ class NavigationService {
       return false;
     }
   }
-  void startNavigation({required String routeId, int legIndex = 0}) {
+  
+  void startNavigation({required int routeId, int legIndex = 0}) {
     if (_channel == null) {
       print('Navigation WS belum terhubung');
       return;
@@ -68,7 +70,7 @@ class NavigationService {
         'leg_index': legIndex,
       }),
     );
-    print('START_NAVIGATION sent: route_id=$routeId, leg_index=$legIndex');
+    developer.log('START_NAVIGATION sent: route_id=$routeId, leg_index=$legIndex', name: 'NavService');
   }
 
   void sendLocationUpdate({
@@ -76,7 +78,7 @@ class NavigationService {
     required double lng,
     required double bearing,
     required double speed,
-    required String currentRouteId,
+    required int currentRouteId,
   }) {
     if (_channel == null) {
       print('Navigation WS belum terhubung');

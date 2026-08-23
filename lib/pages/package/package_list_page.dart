@@ -75,25 +75,36 @@ class PackageListPage extends GetView<PackageListController> {
                   ),
                 );
               }
-
-              // Di PackageListPage, update ListView menjadi:
               return RefreshIndicator(
                 onRefresh: controller.refreshPackages,
-                child: ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    context.horizontalPadding,
-                    4,
-                    context.horizontalPadding,
-                    24,
-                  ),
-                  itemCount: controller.filteredPackages.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
-                  itemBuilder: (context, index) {
-                    final pkg = controller.filteredPackages[index];
-                    return PackageCard(package: pkg);
-                  },
-                ),
+                child: controller.filteredPackages.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 150),
+                          Center(
+                            child: Text(
+                              'Paket tidak ditemukan',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          context.horizontalPadding,
+                          4,
+                          context.horizontalPadding,
+                          24,
+                        ),
+                        itemCount: controller.filteredPackages.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 14),
+                        itemBuilder: (context, index) {
+                          final pkg = controller.filteredPackages[index];
+                          return PackageCard(package: pkg);
+                        },
+                      ),
               );
             }),
           ),
