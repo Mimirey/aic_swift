@@ -425,13 +425,32 @@ class MapPageController extends GetxController
   }
 
   Future<void> recalculateRouteOrder() async {
-    if (routeState.value != RouteState.onRoute) return;
+    if (routeState.value != RouteState.onRoute || _isRecalculating) return;
 
-    print('DEBUG: Recalculating route order from current position...');
-    await _loadOptimizedRoute();
+    _isRecalculating = true;
+    try {
+      print('DEBUG: Recalculating route order from current position...');
+      await _loadOptimizedRoute();
 
-    // routePoints/routeSegments otomatis ke-update dari _loadOptimizedRoute()
-    // deliveryQueue juga ke-resort di dalam situ
+      // Sinkronkan ulang leg aktif ke WS navigation session
+      if (currentPackage != null) {
+        final routeId = optimizedRoute.value?.routeId;
+        final legIndex = _legIndexForPackage(currentPackage!.id);
+        if (routeId != null &&
+            legIndex != null &&
+            navController.isNavigating.value) {
+          navController.beginNavigation(routeId, legIndex: legIndex);
+        }
+      }
+
+      Get.snackbar(
+        'Urutan Diperbarui',
+        'Rute pengiriman disesuaikan dengan posisimu',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      _isRecalculating = false;
+    }
   }
 
   PackageModel _shipmentToPackage(ShipmentModel shipment) {
@@ -602,6 +621,46 @@ class MapPageController extends GetxController
   }
 
   int? _lastTrimIndex;
+  DateTime? _driftStartTime;
+  static const _driftDistanceThreshold = 150.0;
+  static const _driftDurationThreshold = Duration(seconds: 20);
+  bool _isRecalculating = false;
+
+  void _checkForRouteDrift(LatLng userPos) {
+    if (currentPackage == null || deliveryQueue.length < 2 || _isRecalculating)
+      return;
+
+    final distanceToCurrent = Distance().as(
+      LengthUnit.Meter,
+      userPos,
+      LatLng(currentPackage!.latitude, currentPackage!.longitude),
+    );
+
+    final closerPackage = deliveryQueue.skip(1).firstWhereOrNull((pkg) {
+      final d = Distance().as(
+        LengthUnit.Meter,
+        userPos,
+        LatLng(pkg.latitude, pkg.longitude),
+      );
+      return d < distanceToCurrent - _driftDistanceThreshold;
+    });
+
+    if (closerPackage == null) {
+      _driftStartTime = null;
+      return;
+    }
+
+    _driftStartTime ??= DateTime.now();
+
+    final driftDuration = DateTime.now().difference(_driftStartTime!);
+    if (driftDuration >= _driftDurationThreshold) {
+      print(
+        'DEBUG: Drift terdeteksi konsisten ${driftDuration.inSeconds}s ke arah ${closerPackage.customerName}, trigger re-optimasi',
+      );
+      _driftStartTime = null;
+      recalculateRouteOrder();
+    }
+  }
 
   void _trimRouteToPosition(LatLng userPosition) {
     if (_routeSegments.isEmpty || currentPackage == null) return;
@@ -850,6 +909,7 @@ class MapPageController extends GetxController
     routeState.value = RouteState.onRoute;
     _startWatchingArrival();
 
+    
     final routeId = optimizedRoute.value?.routeId;
     print('DEBUG: routeId dari HTTP response = $routeId');
     if (routeId != null) {
@@ -904,6 +964,7 @@ class MapPageController extends GetxController
             if (position.accuracy > 20) return;
             if (routeState.value != RouteState.onRoute) return;
             _trimRouteToPosition(LatLng(position.latitude, position.longitude));
+            _checkForRouteDrift(LatLng(position.latitude, position.longitude));
             trackingService.sendPosition(
               lat: position.latitude,
               lon: position.longitude,
@@ -1000,6 +1061,7 @@ class MapPageController extends GetxController
     deliveryQueue.removeAt(0);
     _updateRouteSegmentsFromQueue();
     _lastTrimIndex = null;
+    _driftStartTime = null;
     capturedPhotos.clear();
     routeState.value = deliveryQueue.isEmpty
         ? RouteState.empty
