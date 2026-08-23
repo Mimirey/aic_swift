@@ -2,13 +2,13 @@ import 'package:Swift/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class TaskSummaryHeader extends StatelessWidget {
-  final String packageLabel;   
-  final Widget trailing;   
+  final Widget leading; // <- ganti dari packageLabel: String
+  final Widget trailing;
   final String resiNumber;
 
   const TaskSummaryHeader({
     super.key,
-    required this.packageLabel,
+    required this.leading,
     required this.trailing,
     required this.resiNumber,
   });
@@ -21,9 +21,8 @@ class TaskSummaryHeader extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(packageLabel, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            leading,
             trailing,
-            // Text(etaLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryLight)),
           ],
         ),
         const SizedBox(height: 4),

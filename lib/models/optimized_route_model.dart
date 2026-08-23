@@ -7,7 +7,7 @@ class OptimizedRouteModel {
   final List<RouteLegModel> legs;
   final String source;
   final String? warning;
-  final String? routeId;
+  final int? routeId;
 
   OptimizedRouteModel({
     required this.status,
@@ -48,7 +48,7 @@ class OptimizedRouteModel {
 
       source: json['source'] as String? ?? '',
       warning: json['warning'] as String?,
-      routeId: json['route_id']?.toString(),
+      routeId: json['route_id']
     );
   }
 }

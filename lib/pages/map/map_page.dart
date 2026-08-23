@@ -1,5 +1,6 @@
+import 'package:Swift/components/common/animated_user_marker_layer.dart';
+import 'package:Swift/components/common/service_type_badge.dart';
 import 'package:Swift/components/common/slide_to_action_button.dart';
-import 'package:Swift/components/common/user_location_marker.dart';
 import 'package:Swift/components/task/route_calculating_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' hide MapController;
@@ -13,7 +14,6 @@ import 'package:Swift/components/task/recipient_note_card.dart';
 import 'package:Swift/components/task/next_package_list.dart';
 import 'package:Swift/data/dummy_next_packages.dart';
 import 'package:Swift/components/buttons/primary_button.dart';
-import 'package:Swift/components/common/package_map_marker.dart';
 import 'package:Swift/components/task/call_recipient_button.dart';
 import 'package:Swift/components/task/current_package_preview.dart';
 import 'package:Swift/components/task/package_photo_picker.dart';
@@ -39,18 +39,40 @@ class MapPage extends GetView<MapPageController> {
         children: [
           // ========== MAP BACKGROUND ==========
           Positioned.fill(
-            child: Obx(() {
-              final position = controller.currentPosition.value;
-              return MapBackground(
-                center: position != null
-                    ? LatLng(position.latitude, position.longitude)
-                    : const LatLng(-6.8048, 110.8385),
-                zoom: 15,
-                markers: controller.buildMarkers(),
-                controller: controller.animatedMapController.mapController,
-                polylines: controller.getRoutePolylines(),
-              );
-            }),
+            child: Builder(
+              builder: (_) {
+                final initialPosition = controller.currentPosition.value;
+                final initialCenter = initialPosition != null
+                    ? LatLng(
+                        initialPosition.latitude,
+                        initialPosition.longitude,
+                      )
+                    : const LatLng(-6.8048, 110.8385);
+
+                return MapBackground(
+                  center: initialCenter,
+                  zoom: 15,
+                  controller: controller.animatedMapController.mapController,
+                  polylinesLayer: Obx(
+                    () => PolylineLayer(
+                      polylines: controller.getRoutePolylines(),
+                    ),
+                  ),
+                  markersLayer: Stack(
+                    children: [
+                      Obx(
+                        () => MarkerLayer(
+                          markers: controller.buildPackageMarkers(),
+                        ),
+                      ),
+                      AnimatedUserMarkerLayer(
+                        positionRx: controller.currentPosition,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
 
           // ========== OVERLAY PUTIH ==========
@@ -79,20 +101,26 @@ class MapPage extends GetView<MapPageController> {
             child: Padding(
               padding: EdgeInsets.only(
                 right: context.horizontalPadding,
-                top: 90,
+                bottom: 100,
               ),
               child: Align(
-                alignment: Alignment.topRight,
+                alignment: Alignment.bottomRight,
                 child: Column(
                   children: [
                     _MapFab(
                       icon: Icons.inventory_2_rounded,
                       onTap: () => Get.toNamed(AppRoutes.packageList),
+                      size: 40,
                     ),
                     const SizedBox(height: 10),
                     _MapFab(
                       icon: Icons.my_location_rounded,
                       onTap: controller.handleRelocate,
+                      size: 40,
+                    ),
+                    _MapFab(
+                      icon: Icons.refresh,
+                      onTap: controller.recalculateRouteOrder,
                     ),
                   ],
                 ),
@@ -131,7 +159,7 @@ class MapPage extends GetView<MapPageController> {
                   ),
                   children: [
                     const SheetDragHandle(),
-                    Obx(() => _buildSheetContent()),
+                    Obx(() => _buildSheetContent(context)),
                   ],
                 ),
               );
@@ -151,13 +179,19 @@ class MapPage extends GetView<MapPageController> {
   }
 
   // ========== SHEET CONTENT ==========
-  Widget _buildSheetContent() {
+  Widget _buildSheetContent(BuildContext context) {
     switch (controller.routeState.value) {
       case RouteState.empty:
-        return const EmptyStateWidget(
-          icon: Icons.inventory_2_outlined,
-          title: 'Tidak Ada Pengiriman Hari Ini',
-          subtitle: 'Belum ada paket yang ditugaskan ke akunmu hari ini.',
+        return SizedBox(
+          height:
+              MediaQuery.of(context).size.height * 0.5, // sesuaikan proporsinya
+          child: const Center(
+            child: EmptyStateWidget(
+              icon: Icons.inventory_2_outlined,
+              title: 'Tidak Ada Pengiriman Hari Ini',
+              subtitle: 'Belum ada paket yang ditugaskan ke akunmu hari ini.',
+            ),
+          ),
         );
 
       case RouteState.assigned:
@@ -211,7 +245,16 @@ class MapPage extends GetView<MapPageController> {
           ),
         ),
         const SizedBox(height: 10),
-        CurrentPackagePreview(address: controller.currentPackage!.address),
+        ...controller.deliveryQueue.map(
+          (pkg) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: CurrentPackagePreview(
+              address: pkg.address,
+              serviceType: pkg.serviceType,
+              resiNumber: pkg.resiNumber,
+            ),
+          ),
+        ),
         const SizedBox(height: 18),
         PrimaryButton(
           label: 'Mulai Optimasi Rute',
@@ -227,50 +270,56 @@ class MapPage extends GetView<MapPageController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSummaryHeader(
-          packageLabel: 'Package 1',
-          trailing: const Text(
-            '40 Menit',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryLight,
+          leading: ServiceTypeBadge(
+            serviceType: controller.currentPackage!.serviceType,
+          ),
+          trailing: Obx(
+            () => Text(
+              controller.estimatedArrivalText,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryLight,
+              ),
             ),
           ),
           resiNumber: controller.currentPackage!.resiNumber,
         ),
-        _buildAnimatedSection(
-          showWhen: controller.stage.value != TaskSheetStage.collapsed,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 10),
+        Obx(
+          () => Row(
             children: [
-              RecipientInfoSection(
-                name: controller.currentPackage!.customerName,
-                address: controller.currentPackage!.address,
+              RouteInfoChip(
+                label: 'Kecepatan',
+                value: '${controller.currentSpeedKmh.toStringAsFixed(0)} km/h',
               ),
-              if (controller.currentPackage!.note != null)
-                RecipientNoteCard(note: controller.currentPackage!.note!),
-            ],
-          ),
-        ),
-        _buildAnimatedSection(
-          showWhen: controller.stage.value == TaskSheetStage.full,
-          child: NextPackageList(
-            items: controller.upcomingPackages.map(toNextPackageItem).toList(),
-            onSeeNextSession: () {},
-          ),
-        ),
-        _buildAnimatedSection(
-          showWhen: controller.stage.value != TaskSheetStage.collapsed,
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              SlideToActionButton(
-                label: 'Geser untuk Hubungi Penerima',
-                icon: Icons.arrow_forward_rounded,
-                onConfirm: controller.handleWhatsApp,
+              const SizedBox(width: 10),
+              RouteInfoChip(
+                label: 'Sisa Jarak',
+                value: controller.navController.remainingDistanceM.value > 0
+                    ? '${(controller.navController.remainingDistanceM.value / 1000).toStringAsFixed(1)} km'
+                    : '-',
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 14),
+        RecipientInfoSection(
+          name: controller.currentPackage!.customerName,
+          address: controller.currentPackage!.address,
+        ),
+        if (controller.currentPackage!.note != null)
+          RecipientNoteCard(note: controller.currentPackage!.note!),
+        const SizedBox(height: 14),
+        NextPackageList(
+          items: controller.upcomingPackageItems,
+          onSeeNextSession: () {},
+        ),
+        const SizedBox(height: 16),
+        SlideToActionButton(
+          label: 'Geser untuk Hubungi Penerima',
+          icon: Icons.arrow_forward_rounded,
+          onConfirm: controller.handleWhatsApp,
         ),
       ],
     );
@@ -282,7 +331,9 @@ class MapPage extends GetView<MapPageController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSummaryHeader(
-          packageLabel: 'Package 1',
+          leading: ServiceTypeBadge(
+            serviceType: controller.currentPackage!.serviceType,
+          ),
           resiNumber: controller.currentPackage!.resiNumber,
           trailing: CallRecipientButton(
             phoneNumber: controller.currentPackage!.phoneNumber,
@@ -344,27 +395,28 @@ class MapPage extends GetView<MapPageController> {
   }
 
   // ========== ANIMATED SECTION ==========
-  Widget _buildAnimatedSection({
-    required bool showWhen,
-    required Widget child,
-  }) {
-    return AnimatedCrossFade(
-      duration: const Duration(milliseconds: 250),
-      crossFadeState: showWhen
-          ? CrossFadeState.showSecond
-          : CrossFadeState.showFirst,
-      firstChild: const SizedBox(width: double.infinity, height: 0),
-      secondChild: child,
-    );
-  }
+  // Widget _buildAnimatedSection({
+  //   required bool showWhen,
+  //   required Widget child,
+  // }) {
+  //   return AnimatedCrossFade(
+  //     duration: const Duration(milliseconds: 250),
+  //     crossFadeState: showWhen
+  //         ? CrossFadeState.showSecond
+  //         : CrossFadeState.showFirst,
+  //     firstChild: const SizedBox(width: double.infinity, height: 0),
+  //     secondChild: child,
+  //   );
+  // }
 }
 
 // ========== MAP FAB ==========
 class _MapFab extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final double size;
 
-  const _MapFab({required this.icon, required this.onTap});
+  const _MapFab({required this.icon, required this.onTap, this.size = 40});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -375,8 +427,8 @@ class _MapFab extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 20, color: AppColors.primaryLight),
+          padding: EdgeInsets.all(size * 0.25),
+          child: Icon(icon, size: size * 0.5, color: AppColors.primaryLight),
         ),
       ),
     );

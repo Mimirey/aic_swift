@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:Swift/controllers/navigation_controller.dart';
+import 'dart:io';
 import 'package:Swift/core/utils/location_service.dart';
 import 'package:Swift/core/utils/whatsapp_launcher.dart';
 import 'package:flutter/material.dart';
@@ -18,8 +20,12 @@ import 'package:Swift/services/route_service.dart';
 import 'package:Swift/config/routes/route_names.dart';
 import 'package:Swift/core/network/api_exception.dart';
 import '../components/common/package_map_marker.dart';
-import '../components/common/user_location_marker.dart';
 import '../core/theme/app_colors.dart';
+import 'package:vibration/vibration.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:collection/collection.dart';
+
+import '../models/next_package_item.dart';
 
 enum TaskSheetStage { collapsed, peek, full }
 
@@ -33,7 +39,7 @@ class _RouteSegment {
 }
 
 class MapPageController extends GetxController
-    with GetTickerProviderStateMixin {
+    with GetTickerProviderStateMixin, WidgetsBindingObserver {
   final _sheetController = DraggableScrollableController();
   StreamSubscription<Position>? _positionSub;
   static const double _arrivalThresholdMeters = 50;
@@ -59,50 +65,199 @@ class MapPageController extends GetxController
   final mapController = MapController();
   late final AnimatedMapController animatedMapController;
 
+  Position? _lastEmittedPosition;
+  DateTime? _lastEmittedTime;
+  bool _hasCenteredOnUser = false;
+
+  static const double _vehicleSpeedThresholdKmh = 8.0;
+  static const double _vehicleSpeedThresholdMps =
+      _vehicleSpeedThresholdKmh / 3.6;
+
   // Getters
   PackageModel? get currentPackage =>
       deliveryQueue.isNotEmpty ? deliveryQueue.first : null;
   List<PackageModel> get upcomingPackages => deliveryQueue.skip(1).toList();
+  List<NextPackageItem> get upcomingPackageItems {
+    return upcomingPackages.map((pkg) {
+      final index = deliveryQueue.indexOf(pkg);
+      return NextPackageItem(
+        address: pkg.address,
+        distanceLabel: _distanceLabelForIndex(index),
+      );
+    }).toList();
+  }
+
   TaskSheetStage get currentStage => stage.value;
   RouteState get currentRouteState => routeState.value;
+  double get currentSpeedKmh {
+    final position = currentPosition.value;
+    if (position == null) return 0.0;
+    final speed = position.speed < 0 ? 0.0 : position.speed; // m/s
+    return speed * 3.6; // konversi ke km/h
+  }
+
+  late final NavigationController navController;
+  DateTime? _lastNavSentAt;
+  static const _navMinInterval = Duration(seconds: 3);
 
   static const collapsedSize = 0.18;
   static const peekSize = 0.5;
   static const fullSize = 0.85;
-
+  Timer? _interactionTimer;
   final RxBool isUserInteracting = false.obs;
+
+  int? _legIndexForPackage(String packageId) {
+    final leg = optimizedRoute.value?.legs.firstWhereOrNull(
+      (l) => l.packageId?.toString() == packageId,
+    );
+    return leg?.legIndex;
+  }
+
+  Timer? _refreshTimer;
+  static const _refreshInterval = Duration(seconds: 60);
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  Future<void> _notifyArrival() async {
+    final hasVibrator = await Vibration.hasVibrator();
+    if (hasVibrator) {
+      Vibration.vibrate(
+        pattern: [0, 400, 200, 400],
+      ); // ms: jeda, getar, jeda, getar
+    }
+
+    // Mainkan suara
+    try {
+      await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
+    } catch (e) {
+      print('ERROR play sound: $e');
+    }
+  }
 
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
+    if (!Get.isRegistered<NavigationController>()) {
+      Get.put(NavigationController());
+    }
+    navController = Get.find<NavigationController>();
     animatedMapController = AnimatedMapController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOut,
     );
     mapController.mapEventStream.listen((event) {
-      if (event is MapEventMoveStart) {
+      final isUserGesture =
+          event.source != MapEventSource.mapController &&
+          event.source != MapEventSource.custom;
+
+      if (isUserGesture) {
         isUserInteracting.value = true;
-      } else if (event is MapEventMoveEnd) {
-        isUserInteracting.value = false;
+        _interactionTimer?.cancel();
+        _interactionTimer = Timer(const Duration(seconds: 3), () {
+          isUserInteracting.value = false;
+        });
+      }
+    });
+    ever(navController.activePolyline, (encoded) {
+      if (encoded == null || currentPackage == null) return;
+      try {
+        final decoded = PolylinePoints.decodePolyline(encoded);
+        final newPoints = decoded
+            .map((p) => LatLng(p.latitude, p.longitude))
+            .toList();
+
+        if (newPoints.isEmpty) return;
+
+        final activeIndex = _routeSegments.indexWhere(
+          (seg) => seg.packageId == currentPackage!.id,
+        );
+
+        if (activeIndex != -1) {
+          final updatedSegments = List<_RouteSegment>.from(_routeSegments);
+          updatedSegments[activeIndex] = _RouteSegment(
+            currentPackage!.id,
+            newPoints,
+          );
+          _routeSegments.value = updatedSegments;
+        }
+        _lastTrimIndex = null;
+
+        // routePoints tetap diupdate buat keperluan lain (fit camera, marker start/end)
+        routePoints.value = newPoints;
+      } catch (e) {
+        print('ERROR decode reroute polyline: $e');
       }
     });
 
     _sheetController.addListener(_onSheetChanged);
-    _loadCurrentLocation();
+    _initSequence();
     _connectTracking();
-    _loadShipments();
     _startWatchingArrival();
+    _centerOnFirstFix();
+    _startAutoRefresh();
+  }
+
+  Future<void> _initSequence() async {
+    await _loadCurrentLocation();
+    await _loadShipments();
   }
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     _positionSub?.cancel();
     _sheetController.removeListener(_onSheetChanged);
     _sheetController.dispose();
     animatedMapController.dispose();
     trackingService.disconnect();
+    navController.stopNavigation();
+    _interactionTimer?.cancel();
+    _refreshTimer?.cancel();
+    _audioPlayer.dispose();
     super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (routeState.value == RouteState.empty ||
+          routeState.value == RouteState.assigned) {
+        _loadShipments();
+      }
+    }
+  }
+
+  double _dynamicMinDistance(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return 1.0;
+    }
+    final scaled = speedMps * 1.5;
+    return scaled.clamp(3.0, 15.0);
+  }
+
+  Duration _dynamicMaxInterval(double speedMps) {
+    if (speedMps < _vehicleSpeedThresholdMps) {
+      return const Duration(seconds: 1);
+    }
+    return const Duration(seconds: 2);
+  }
+
+  bool _shouldEmitUpdate(Position newPosition) {
+    if (_lastEmittedPosition == null || _lastEmittedTime == null) return true;
+
+    final distance = Distance().as(
+      LengthUnit.Meter,
+      LatLng(_lastEmittedPosition!.latitude, _lastEmittedPosition!.longitude),
+      LatLng(newPosition.latitude, newPosition.longitude),
+    );
+    final elapsed = DateTime.now().difference(_lastEmittedTime!);
+
+    final speed = newPosition.speed < 0 ? 0.0 : newPosition.speed;
+
+    final minDistance = _dynamicMinDistance(speed);
+    final maxInterval = _dynamicMaxInterval(speed);
+
+    return distance >= minDistance || elapsed >= maxInterval;
   }
 
   void _onSheetChanged() {
@@ -157,6 +312,43 @@ class MapPageController extends GetxController
     return polylines;
   }
 
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
+      // Cuma refresh kalau lagi ga di tengah proses antar (biar ga ganggu delivery queue yang lagi jalan)
+      if (routeState.value == RouteState.empty ||
+          routeState.value == RouteState.assigned) {
+        _loadShipments();
+      }
+    });
+  }
+
+  String get estimatedArrivalText {
+    final remainingS = navController.remainingTimeS.value;
+    final remainingM = navController.remainingDistanceM.value;
+
+    final isImplausible =
+        remainingS > 0 &&
+        remainingM > 0 &&
+        (remainingS / (remainingM / 1000)) >
+            300; // >300 detik/km ≈ di bawah 12 km/jam
+
+    if (remainingS > 0 && !isImplausible) {
+      final minutes = (remainingS / 60).ceil();
+      return '$minutes Menit';
+    }
+    if (currentPackage != null) {
+      final activeLeg = optimizedRoute.value?.legs.firstWhereOrNull(
+        (l) => l.packageId?.toString() == currentPackage!.id,
+      );
+      if (activeLeg != null) {
+        return '${activeLeg.durationMins.toStringAsFixed(0)} Menit';
+      }
+    }
+
+    return '-';
+  }
+
   Future<void> _connectTracking() async {
     try {
       await trackingService.connect();
@@ -173,18 +365,51 @@ class MapPageController extends GetxController
     }
   }
 
+  void _centerOnFirstFix() {
+    ever<Position?>(currentPosition, (position) {
+      if (position == null || _hasCenteredOnUser) return;
+      _hasCenteredOnUser = true;
+      if (isUserInteracting.value) return;
+      try {
+        animatedMapController.mapController.move(
+          LatLng(position.latitude, position.longitude),
+          15,
+        );
+      } catch (e) {
+        print('Initial center error: $e');
+      }
+    });
+  }
+
   Future<void> _loadShipments() async {
     try {
       isLoadingShipments.value = true;
       final loadedShipments = await shipmentService.getShipments();
-      final packages = loadedShipments.map(_shipmentToPackage).toList();
-      shipments.value = loadedShipments;
+
+      final activeShipments = loadedShipments
+          .where(
+            (s) =>
+                s.status != 'delivered' &&
+                s.status != 'failed' &&
+                s.status != 'returned',
+          )
+          .toList();
+
+      final packages = activeShipments
+          .map(_shipmentToPackage)
+          .toList(); // <- ganti
+      shipments.value = activeShipments; // <- ganti
       deliveryQueue.value = packages;
+
+      print(
+        'DEBUG total shipments dari API: ${loadedShipments.length}, setelah filter: ${activeShipments.length}',
+      );
 
       if (packages.isEmpty) {
         routeState.value = RouteState.empty;
       } else {
         routeState.value = RouteState.assigned;
+        await _loadOptimizedRoute();
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
@@ -197,6 +422,16 @@ class MapPageController extends GetxController
     } finally {
       isLoadingShipments.value = false;
     }
+  }
+
+  Future<void> recalculateRouteOrder() async {
+    if (routeState.value != RouteState.onRoute) return;
+
+    print('DEBUG: Recalculating route order from current position...');
+    await _loadOptimizedRoute();
+
+    // routePoints/routeSegments otomatis ke-update dari _loadOptimizedRoute()
+    // deliveryQueue juga ke-resort di dalam situ
   }
 
   PackageModel _shipmentToPackage(ShipmentModel shipment) {
@@ -236,15 +471,9 @@ class MapPageController extends GetxController
       print('ERROR: Cannot load route - queue empty or position null');
       return;
     }
-
     loadingRoute.value = true;
 
     try {
-      print('=== LOADING OPTIMIZED ROUTE ===');
-      print(
-        'Courier position: ${currentPosition.value!.latitude}, ${currentPosition.value!.longitude}',
-      );
-      print('Packages to deliver: ${deliveryQueue.length}');
       final route = await routeService.findOptimizedRoute(
         courierLatitude: currentPosition.value!.latitude,
         courierLongitude: currentPosition.value!.longitude,
@@ -287,9 +516,7 @@ class MapPageController extends GetxController
             .toList();
 
         if (pointsLeg.isNotEmpty) {
-          segments.add(
-            _RouteSegment(leg.packageId!.toString(), pointsLeg),
-          ); 
+          segments.add(_RouteSegment(leg.packageId!.toString(), pointsLeg));
         }
       }
       if (segments.isEmpty && route.stops.isNotEmpty) {
@@ -303,6 +530,27 @@ class MapPageController extends GetxController
           }
         }
       }
+      if (segments.isNotEmpty && currentPosition.value != null) {
+        final userLatLng = LatLng(
+          currentPosition.value!.latitude,
+          currentPosition.value!.longitude,
+        );
+        final firstPoints = segments.first.points;
+        if (firstPoints.isNotEmpty) {
+          final distance = Distance().as(
+            LengthUnit.Meter,
+            userLatLng,
+            firstPoints.first,
+          );
+          if (distance > 10) {
+            segments[0] = _RouteSegment(segments.first.packageId, [
+              userLatLng,
+              ...firstPoints,
+            ]);
+          }
+        }
+      }
+      _lastTrimIndex = null;
       _routeSegments.value = segments;
 
       final points = _decodeRoute(route);
@@ -351,6 +599,93 @@ class MapPageController extends GetxController
         snackPosition: SnackPosition.BOTTOM,
       );
     }
+  }
+
+  int? _lastTrimIndex;
+
+  void _trimRouteToPosition(LatLng userPosition) {
+    if (_routeSegments.isEmpty || currentPackage == null) return;
+
+    final activeIndex = _routeSegments.indexWhere(
+      (seg) => seg.packageId == currentPackage!.id,
+    );
+    if (activeIndex == -1) return;
+
+    final segment = _routeSegments[activeIndex];
+    final points = segment.points;
+    if (points.length < 2) return;
+
+    final distanceCalc = Distance();
+    final searchStart = _lastTrimIndex ?? 0;
+    const searchWindow =
+        30; // maksimal maju 30 titik per update, sesuaikan kalau perlu
+
+    int closestIndex = searchStart;
+    double closestDistance = double.infinity;
+
+    final searchEnd = (searchStart + searchWindow).clamp(0, points.length - 1);
+    for (int i = searchStart; i <= searchEnd; i++) {
+      final d = distanceCalc.as(LengthUnit.Meter, userPosition, points[i]);
+      if (d < closestDistance) {
+        closestDistance = d;
+        closestIndex = i;
+      }
+    }
+
+    if (closestDistance > 100) return;
+
+    _lastTrimIndex = closestIndex;
+
+    final trimmedPoints = [userPosition, ...points.sublist(closestIndex)];
+
+    final updatedSegments = List<_RouteSegment>.from(_routeSegments);
+    updatedSegments[activeIndex] = _RouteSegment(
+      segment.packageId,
+      trimmedPoints,
+    );
+    _routeSegments.value = updatedSegments;
+  }
+
+  String _distanceLabelForIndex(int index) {
+    // Coba ambil jarak asli dari hasil optimasi rute (jarak jalan, bukan garis lurus)
+    final legs = optimizedRoute.value?.legs;
+    if (legs != null) {
+      // index di sini relatif ke deliveryQueue, cari leg yang packageId-nya cocok
+      final packageId = deliveryQueue[index].id;
+      final leg = legs.firstWhereOrNull(
+        (l) => l.packageId?.toString() == packageId,
+      );
+      if (leg != null) {
+        return _formatDistance(leg.distanceKm * 1000); // distanceKm -> meter
+      }
+    }
+
+    // Fallback: hitung garis lurus antar titik kalau data leg ga ketemu
+    final from = index == 0
+        ? currentPosition.value != null
+              ? LatLng(
+                  currentPosition.value!.latitude,
+                  currentPosition.value!.longitude,
+                )
+              : null
+        : LatLng(
+            deliveryQueue[index - 1].latitude,
+            deliveryQueue[index - 1].longitude,
+          );
+
+    if (from == null) return '-';
+
+    final to = LatLng(
+      deliveryQueue[index].latitude,
+      deliveryQueue[index].longitude,
+    );
+    final meters = Distance().as(LengthUnit.Meter, from, to);
+    return _formatDistance(meters);
+  }
+
+  String _formatDistance(double meters) {
+    if (meters < 1000) return '${meters.toStringAsFixed(0)} m';
+    return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   List<LatLng> _decodeRoute(OptimizedRouteModel route) {
@@ -511,56 +846,120 @@ class MapPageController extends GetxController
       return;
     }
 
+    await _markAllAsPickedUp();
     routeState.value = RouteState.onRoute;
     _startWatchingArrival();
+
+    final routeId = optimizedRoute.value?.routeId;
+    print('DEBUG: routeId dari HTTP response = $routeId');
+    if (routeId != null) {
+      final connected = await navController.connect();
+      if (connected) {
+        navController.beginNavigation(routeId);
+      } else {
+        print('NAV: gagal connect ke navigation service');
+      }
+    }
   }
 
   void _startWatchingArrival() {
     _positionSub?.cancel();
-    _positionSub =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
+
+    final locationSettings = Platform.isAndroid
+        ? AndroidSettings(
             accuracy: LocationAccuracy.high,
-            distanceFilter: 1,
-            // timeLimit: Duration(seconds: 2),
-          ),
-        ).listen((position) {
-          currentPosition.value = position;
-          // if (routeState.value == RouteState.onRoute &&
-          //     !isUserInteracting.value) {
-          //   try {
-          //     animatedMapController.animateTo(
-          //       dest: LatLng(position.latitude, position.longitude),
-          //       zoom: 16,
-          //     );
-          //   } catch (e) {
-          //     print('Auto-follow error: $e');
-          //   }
-          // }
-          if (position.accuracy > 20) {
-            return;
-          }
-          if (routeState.value != RouteState.onRoute) {
-            return;
-          }
-          trackingService.sendPosition(
-            lat: position.latitude,
-            lon: position.longitude,
-            bearing: position.heading,
-            speed: position.speed,
+            distanceFilter: 0,
+            intervalDuration: const Duration(seconds: 1),
+          )
+        : AppleSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 0,
+            activityType: ActivityType.fitness,
+            pauseLocationUpdatesAutomatically: false,
           );
 
-          final distance = distanceToTargetInMeters(
-            position,
-            currentPackage!.latitude,
-            currentPackage!.longitude,
-          );
+    _positionSub =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (position) {
+            currentPosition.value = position;
 
-          if (distance <= _arrivalThresholdMeters) {
-            routeState.value = RouteState.validating;
-            _positionSub?.cancel();
-          }
-        });
+            if (!_shouldEmitUpdate(position)) return;
+            _lastEmittedPosition = position;
+            _lastEmittedTime = DateTime.now();
+
+            // if (!isUserInteracting.value &&
+            //     routeState.value == RouteState.onRoute) {
+            //   try {
+            //     final currentZoom =
+            //         animatedMapController.mapController.camera.zoom;
+            //     animatedMapController.animateTo(
+            //       dest: LatLng(position.latitude, position.longitude),
+            //       zoom: currentZoom,
+            //     );
+            //   } catch (e) {
+            //     print('Auto-follow error: $e');
+            //   }
+            // }
+
+            if (position.accuracy > 20) return;
+            if (routeState.value != RouteState.onRoute) return;
+            _trimRouteToPosition(LatLng(position.latitude, position.longitude));
+            trackingService.sendPosition(
+              lat: position.latitude,
+              lon: position.longitude,
+              bearing: position.heading,
+              speed: position.speed,
+            );
+
+            final routeId = optimizedRoute.value?.routeId;
+            if (navController.isNavigating.value && routeId != null) {
+              final now = DateTime.now();
+              if (_lastNavSentAt == null ||
+                  now.difference(_lastNavSentAt!) >= _navMinInterval) {
+                _lastNavSentAt = now;
+                navController.sendLocationUpdate(
+                  lat: position.latitude,
+                  lng: position.longitude,
+                  bearing: position.heading,
+                  speed: position.speed,
+                  currentRouteId: routeId,
+                );
+              }
+            }
+
+            final distance = distanceToTargetInMeters(
+              position,
+              currentPackage!.latitude,
+              currentPackage!.longitude,
+            );
+
+            if (distance <= _arrivalThresholdMeters) {
+              routeState.value = RouteState.validating;
+              _notifyArrival();
+            }
+          },
+        );
+  }
+
+  Future<void> _markAllAsPickedUp() async {
+    for (final pkg in deliveryQueue) {
+      final shipment = shipments.firstWhereOrNull(
+        (s) => s.paket.id.toString() == pkg.id,
+      );
+      if (shipment == null) continue;
+
+      // Skip kalau udah bukan 'assigned' (misal abis di-refresh ulang / retry)
+      if (shipment.status != 'assigned') continue;
+
+      try {
+        await shipmentService.updateShipmentStatus(
+          shipmentId: shipment.shipmentId,
+          status: 'picked_up',
+        );
+      } catch (e) {
+        print('ERROR set picked_up untuk shipment ${shipment.shipmentId}: $e');
+      }
+    }
   }
 
   Future<void> handleCapturePhoto() async {
@@ -573,15 +972,64 @@ class MapPageController extends GetxController
     capturedPhotos.add(photo);
   }
 
-  void handleConfirmPackage() {
+  void handleConfirmPackage() async {
     if (currentPackage == null) return;
+
+    final confirmedPackage = currentPackage!;
+
+    final shipment = shipments.firstWhereOrNull(
+      (s) => s.paket.id.toString() == confirmedPackage.id,
+    );
+
+    if (shipment != null) {
+      try {
+        await shipmentService.updateShipmentStatus(
+          shipmentId: shipment.shipmentId,
+          status: 'delivered',
+        );
+      } on ApiException catch (e) {
+        Get.snackbar('Error', 'Gagal update status: ${e.message}');
+        return;
+      } catch (e) {
+        print('ERROR update status: $e');
+        Get.snackbar('Error', 'Gagal update status paket');
+        return;
+      }
+    }
 
     deliveryQueue.removeAt(0);
     _updateRouteSegmentsFromQueue();
+    _lastTrimIndex = null;
     capturedPhotos.clear();
     routeState.value = deliveryQueue.isEmpty
         ? RouteState.empty
         : RouteState.onRoute;
+    await _refreshShipmentStatuses();
+    if (currentPackage != null) {
+      final routeId = optimizedRoute.value?.routeId;
+      final legIndex = _legIndexForPackage(currentPackage!.id);
+      if (routeId != null &&
+          legIndex != null &&
+          navController.isNavigating.value) {
+        navController.beginNavigation(routeId, legIndex: legIndex);
+      }
+    }
+  }
+
+  Future<void> _refreshShipmentStatuses() async {
+    try {
+      final refreshed = await shipmentService.getShipments();
+      shipments.value = refreshed
+          .where(
+            (s) =>
+                s.status != 'delivered' &&
+                s.status != 'failed' &&
+                s.status != 'returned',
+          )
+          .toList();
+    } catch (e) {
+      print('ERROR refresh shipments setelah update status: $e');
+    }
   }
 
   Future<void> handleRelocate() async {
@@ -611,38 +1059,33 @@ class MapPageController extends GetxController
     return 'Rp $buffer';
   }
 
-  List<Marker> buildMarkers() {
+  List<Marker> buildPackageMarkers() {
+    print(
+      'DEBUG buildPackageMarkers - deliveryQueue length: ${deliveryQueue.length}, ids: ${deliveryQueue.map((p) => p.id).toList()}',
+    );
     final packageMarkers = deliveryQueue.map((pkg) {
       final isActive = currentPackage != null && pkg.id == currentPackage!.id;
-
+      final size = isActive ? 40.0 : 26.0;
+      final height = size * 1.25;
       return Marker(
         point: LatLng(pkg.latitude, pkg.longitude),
         width: isActive ? 34 : 16,
         height: isActive ? 34 : 16,
+        alignment: Alignment.topCenter,
         child: PackageMapMarker(isActive: isActive),
       );
     }).toList();
 
-    if (currentPosition.value != null) {
-      packageMarkers.add(
-        Marker(
-          point: LatLng(
-            currentPosition.value!.latitude,
-            currentPosition.value!.longitude,
-          ),
-          width: 40,
-          height: 40,
-          child: const UserLocationMarker(),
-        ),
-      );
-    }
+    final activeSegment = currentPackage != null
+        ? _routeSegments.firstWhereOrNull(
+            (seg) => seg.packageId == currentPackage!.id,
+          )
+        : null;
 
-    // Debug: Tambahkan marker untuk titik awal dan akhir route
-    if (routePoints.isNotEmpty) {
-      // Marker titik awal route (hijau)
+    if (activeSegment != null && activeSegment.points.isNotEmpty) {
       packageMarkers.add(
         Marker(
-          point: routePoints.first,
+          point: activeSegment.points.first,
           width: 25,
           height: 25,
           child: Container(
@@ -656,10 +1099,9 @@ class MapPageController extends GetxController
         ),
       );
 
-      // Marker titik akhir route (merah)
       packageMarkers.add(
         Marker(
-          point: routePoints.last,
+          point: activeSegment.points.last,
           width: 25,
           height: 25,
           child: Container(

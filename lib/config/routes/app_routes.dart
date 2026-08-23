@@ -15,10 +15,22 @@ class AppPages {
   AppPages._();
 
   static final List<GetPage> pages = [
-    GetPage(name: AppRoutes.login, page: () => const LoginPage(), binding: LoginBinding()),
-    GetPage(name: AppRoutes.packageList, page: () => const PackageListPage(), binding: PackageListBinding()),
-    GetPage(name: AppRoutes.map, page: () =>  MapPage(), binding: MapBinding()),
-    GetPage(name: AppRoutes.mapCalculating, page: () => const MapCalculatingPage(), binding: MapCalculatingBinding()),
-    GetPage(name: AppRoutes.splash, page: ()=> const SplashPage())
+    GetPage(
+      name: AppRoutes.login,
+      page: () => const LoginPage(),
+      binding: LoginBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.packageList,
+      page: () => const PackageListPage(),
+      binding: PackageListBinding(),
+    ),
+    GetPage(name: AppRoutes.map, page: () => MapPage(), binding: MapBinding()),
+    GetPage(
+      name: AppRoutes.mapCalculating,
+      page: () => const MapCalculatingPage(),
+      binding: MapCalculatingBinding(),
+    ),
+    GetPage(name: AppRoutes.splash, page: () => const SplashPage()),
   ];
 }

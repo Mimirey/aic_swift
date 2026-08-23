@@ -1,28 +1,22 @@
 import 'dart:convert';
-
 import 'package:web_socket_channel/web_socket_channel.dart';
-
 import '../core/utils/token_storage.dart';
 
 class TrackingService {
   TrackingService._();
-
   static final TrackingService instance = TrackingService._();
 
   WebSocketChannel? _channel;
 
   Future<bool> connect() async {
   final token = await TokenStorage.readToken();
-
   if (token == null || token.isEmpty) {
     throw Exception('Token tidak ditemukan');
   }
-
   final uri = Uri.parse(
-    'wss://davis-malvaceous-glenda.ngrok-free.dev'
+    'wss://linking-backgrounds-processor-situation.trycloudflare.com'
     '/api/v1/ws/driver/position?token=$token',
   );
-
   print('Connecting WebSocket...');
   try {
     final channel = WebSocketChannel.connect(uri);

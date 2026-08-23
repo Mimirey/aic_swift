@@ -1,11 +1,11 @@
 import 'package:Swift/controllers/navigation_controller.dart';
 import 'package:get/get.dart';
-import 'package:Swift/controllers/map_controller.dart';
 
-class MapBinding extends Bindings {
+class NavigationBinding extends Bindings{
   @override
   void dependencies() {
-    Get.lazyPut<MapPageController>(() => MapPageController());
+    // TODO: implement dependencies
     Get.lazyPut<NavigationController>(()=> NavigationController());
   }
+  
 }

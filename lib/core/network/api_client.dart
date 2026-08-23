@@ -99,4 +99,45 @@ class ApiClient {
       statusCode: response.statusCode,
     );
   }
+
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+    bool withAuth = false,
+  }) async {
+    final uri = Uri.parse('${ApiConstants.baseUrl}$path');
+    final headers = {'Content-Type': 'application/json'};
+
+    if (withAuth) {
+      final token = await TokenStorage.readToken();
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+    }
+
+    late http.Response response;
+    try {
+      response = await http
+          .patch(uri, headers: headers, body: jsonEncode(body ?? {}))
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      throw const ApiException(
+        'Gagal terhubung ke server. Cek koneksi internet kamu.',
+      );
+    }
+
+    final decoded = _safeDecode(response.body);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return decoded;
+    }
+
+    if (response.statusCode == 401) {
+      await TokenStorage.clearToken();
+    }
+
+    throw ApiException(
+      decoded['message'] as String? ??
+          'Terjadi kesalahan (${response.statusCode})',
+      statusCode: response.statusCode,
+    );
+  }
 }

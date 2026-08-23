@@ -24,7 +24,6 @@ class DateChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.primaryLight),
           const SizedBox(width: 6),
           Text(
             date,

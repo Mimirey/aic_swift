@@ -15,11 +15,18 @@ class ShipmentService {
     final data = response['data'] as List;
 
     return data
-        .map(
-          (item) => ShipmentModel.fromJson(
-            item as Map<String, dynamic>,
-          ),
-        )
+        .map((item) => ShipmentModel.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<void> updateShipmentStatus({
+    required int shipmentId,
+    required String status,
+  }) async {
+    await ApiClient.instance.patch(
+      '${ApiConstants.shipments}/$shipmentId/status',
+      body: {'status': status},
+      withAuth: true,
+    );
   }
 }

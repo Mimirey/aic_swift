@@ -24,6 +24,9 @@ dependencies:
   dotted_border: ^3.1.0
   web_socket_channel: ^3.0.3
   flutter_polyline_points: ^3.1.0
+  flutter_compass: ^0.8.1
+  vibration: ^3.1.8
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   flutter_test:
