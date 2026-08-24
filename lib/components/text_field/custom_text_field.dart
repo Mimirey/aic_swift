@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:Swift/components/text_field/date_input_formatter.dart';
 
+import '../../core/theme/app_colors.dart';
+
 class CustomTextField extends StatelessWidget {
   final Color? fillColor, borderColor;
   final bool isNumber, isDate, enabled, alignLabelWithHint;
@@ -149,7 +151,7 @@ class CustomTextField extends StatelessWidget {
             borderRadius: BorderRadius.circular(16.0),
             borderSide: BorderSide(
               width: borderWidth ?? 0,
-              color: Colors.orange,
+              color: AppColors.primary,
             ),
           ),
 

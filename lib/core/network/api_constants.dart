@@ -2,7 +2,7 @@ class ApiConstants {
   ApiConstants._();
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://linking-backgrounds-processor-situation.trycloudflare.com/',
+    defaultValue: 'https://coleman-codes-portion-restore.trycloudflare.com/',
   );
   static const String login = 'api/v1/auth/login';
   static const String shipments = 'api/v1/shipments';

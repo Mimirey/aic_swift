@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 class ShipmentModel {
   final int shipmentId;
   final String resi;
@@ -82,12 +84,14 @@ class PackageInfoModel {
 
 class CodModel {
   final String status;
+  final bool is_cod;
   final double amount;
   final String? collectedAt;
   final String? remittedAt;
 
   CodModel({
     required this.status,
+    required this.is_cod, 
     required this.amount,
     required this.collectedAt,
     required this.remittedAt,
@@ -96,6 +100,7 @@ class CodModel {
   factory CodModel.fromJson(Map<String, dynamic> json) {
     return CodModel(
       status: json['status'] as String? ?? 'pending',
+      is_cod: json['is_cod'],
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       collectedAt: json['collected_at'],
       remittedAt: json['remitted_at'],
