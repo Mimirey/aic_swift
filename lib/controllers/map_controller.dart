@@ -55,6 +55,7 @@ class MapPageController extends GetxController
   final Rx<OptimizedRouteModel?> optimizedRoute = Rxn<OptimizedRouteModel>();
   final RxList<LatLng> routePoints = <LatLng>[].obs;
   final RxBool loadingRoute = false.obs;
+  final RxBool showRouteVisuals = false.obs;
 
   // Services
   final trackingService = TrackingService.instance;
@@ -121,12 +122,10 @@ class MapPageController extends GetxController
     if (hasVibrator) {
       Vibration.vibrate(
         pattern: [0, 400, 200, 400],
-      ); // ms: jeda, getar, jeda, getar
+      ); 
     }
-
-    // Mainkan suara
     try {
-      await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
+      await _audioPlayer.play(AssetSource('sounds/notification1.mp3'));
     } catch (e) {
       print('ERROR play sound: $e');
     }
@@ -186,6 +185,13 @@ class MapPageController extends GetxController
         routePoints.value = newPoints;
       } catch (e) {
         print('ERROR decode reroute polyline: $e');
+      }
+    });
+    ever(navController.offRoute, (isOff) {
+      if (isOff == true &&
+          routeState.value == RouteState.onRoute &&
+          !_isRecalculating) {
+        recalculateRouteOrder();
       }
     });
 
@@ -286,7 +292,7 @@ class MapPageController extends GetxController
   }
 
   List<Polyline> getRoutePolylines() {
-    if (_routeSegments.isEmpty) return [];
+    if (!showRouteVisuals.value || _routeSegments.isEmpty) return [];
     final polylines = <Polyline>[];
     for (final seg in _routeSegments) {
       final index = deliveryQueue.indexWhere((pkg) => pkg.id == seg.packageId);
@@ -401,14 +407,11 @@ class MapPageController extends GetxController
       shipments.value = activeShipments; // <- ganti
       deliveryQueue.value = packages;
 
-      print(
-        'DEBUG total shipments dari API: ${loadedShipments.length}, setelah filter: ${activeShipments.length}',
-      );
-
       if (packages.isEmpty) {
         routeState.value = RouteState.empty;
       } else {
         routeState.value = RouteState.assigned;
+        showRouteVisuals.value = false;
         await _loadOptimizedRoute();
       }
     } on ApiException catch (e) {
@@ -429,8 +432,7 @@ class MapPageController extends GetxController
 
     _isRecalculating = true;
     try {
-      print('DEBUG: Recalculating route order from current position...');
-      await _loadOptimizedRoute();
+      
 
       // Sinkronkan ulang leg aktif ke WS navigation session
       if (currentPackage != null) {
@@ -440,6 +442,7 @@ class MapPageController extends GetxController
             legIndex != null &&
             navController.isNavigating.value) {
           navController.beginNavigation(routeId, legIndex: legIndex);
+          navController.offRoute.value = false;
         }
       }
 
@@ -460,7 +463,7 @@ class MapPageController extends GetxController
       serviceType: shipment.paket.serviceType.toLowerCase() == 'express'
           ? ServiceType.express
           : ServiceType.regular,
-      isCod: shipment.cod.status != 'pending' || shipment.cod.amount > 0,
+      isCod: shipment.cod.is_cod,
       codAmount: shipment.cod.amount,
       customerName: shipment.paket.nama,
       phoneNumber: shipment.paket.nomorTelepon,
@@ -521,9 +524,6 @@ class MapPageController extends GetxController
         }
         deliveryQueue.value = sortedQueue;
         for (int i = 0; i < deliveryQueue.length; i++) {
-          print(
-            '  Stop $i: ${deliveryQueue[i].customerName} (${deliveryQueue[i].id})',
-          );
         }
       }
       final segments = <_RouteSegment>[];
@@ -621,46 +621,49 @@ class MapPageController extends GetxController
   }
 
   int? _lastTrimIndex;
-  DateTime? _driftStartTime;
-  static const _driftDistanceThreshold = 150.0;
-  static const _driftDurationThreshold = Duration(seconds: 20);
+  // DateTime? _driftStartTime;
+  // static const _driftDistanceThreshold = 150.0;
+  // static const _driftDurationThreshold = Duration(seconds: 20);
   bool _isRecalculating = false;
 
-  void _checkForRouteDrift(LatLng userPos) {
-    if (currentPackage == null || deliveryQueue.length < 2 || _isRecalculating)
-      return;
+  // void _checkForRouteDrift(LatLng userPos) {
+  //   if (currentPackage == null || deliveryQueue.length < 2 || _isRecalculating)
+  //     return;
 
-    final distanceToCurrent = Distance().as(
-      LengthUnit.Meter,
-      userPos,
-      LatLng(currentPackage!.latitude, currentPackage!.longitude),
-    );
+  //   final distanceToCurrent = Distance().as(
+  //     LengthUnit.Meter,
+  //     userPos,
+  //     LatLng(currentPackage!.latitude, currentPackage!.longitude),
+  //   );
 
-    final closerPackage = deliveryQueue.skip(1).firstWhereOrNull((pkg) {
-      final d = Distance().as(
-        LengthUnit.Meter,
-        userPos,
-        LatLng(pkg.latitude, pkg.longitude),
-      );
-      return d < distanceToCurrent - _driftDistanceThreshold;
-    });
+  //   final closerPackage = deliveryQueue.skip(1).firstWhereOrNull((pkg) {
+  //     final d = Distance().as(
+  //       LengthUnit.Meter,
+  //       userPos,
+  //       LatLng(pkg.latitude, pkg.longitude),
+  //     );
+  //     return d < distanceToCurrent - _driftDistanceThreshold;
+  //   });
 
-    if (closerPackage == null) {
-      _driftStartTime = null;
-      return;
-    }
+  //   if (closerPackage == null) {
+  //     _driftStartTime = null;
+  //     return;
+  //   }
 
-    _driftStartTime ??= DateTime.now();
+  //   if (navController.offRoute.value) {
+  //     print('DEBUG: off_route BE + closer package -> trigger langsung');
+  //     _driftStartTime = null;
+  //     recalculateRouteOrder();
+  //     return;
+  //   }
 
-    final driftDuration = DateTime.now().difference(_driftStartTime!);
-    if (driftDuration >= _driftDurationThreshold) {
-      print(
-        'DEBUG: Drift terdeteksi konsisten ${driftDuration.inSeconds}s ke arah ${closerPackage.customerName}, trigger re-optimasi',
-      );
-      _driftStartTime = null;
-      recalculateRouteOrder();
-    }
-  }
+  //   _driftStartTime ??= DateTime.now();
+  //   final driftDuration = DateTime.now().difference(_driftStartTime!);
+  //   if (driftDuration >= _driftDurationThreshold) {
+  //     _driftStartTime = null;
+  //     recalculateRouteOrder();
+  //   }
+  // }
 
   void _trimRouteToPosition(LatLng userPosition) {
     if (_routeSegments.isEmpty || currentPackage == null) return;
@@ -750,9 +753,6 @@ class MapPageController extends GetxController
   List<LatLng> _decodeRoute(OptimizedRouteModel route) {
     final List<LatLng> points = [];
     for (final stop in route.stops) {
-      print(
-        '  Stop ${stop.stopOrder}: ${stop.recipientName} at ${stop.latitude}, ${stop.longitude}',
-      );
     }
     for (int i = 0; i < route.legs.length; i++) {
       final leg = route.legs[i];
@@ -784,19 +784,6 @@ class MapPageController extends GetxController
           }
           points.add(LatLng(point.latitude, point.longitude));
         }
-
-        if (decoded.isNotEmpty) {
-          print(
-            '  Leg start: '
-            '${decoded.first.latitude}, '
-            '${decoded.first.longitude}',
-          );
-          print(
-            '  Leg end: '
-            '${decoded.last.latitude}, '
-            '${decoded.last.longitude}',
-          );
-        }
       } catch (e) {
         print('ERROR decoding geometry: $e');
 
@@ -815,14 +802,6 @@ class MapPageController extends GetxController
         points.add(LatLng(stop.latitude, stop.longitude));
       }
     }
-    print('Total decoded points: ${points.length}');
-    if (points.isNotEmpty) {
-      print(
-        'Overall start: ${points.first.latitude}, ${points.first.longitude}',
-      );
-      print('Overall end: ${points.last.latitude}, ${points.last.longitude}');
-    }
-    print('=== END DECODE ROUTE DEBUG ===');
     return points;
   }
 
@@ -906,10 +885,10 @@ class MapPageController extends GetxController
     }
 
     await _markAllAsPickedUp();
+    showRouteVisuals.value = true;
     routeState.value = RouteState.onRoute;
     _startWatchingArrival();
 
-    
     final routeId = optimizedRoute.value?.routeId;
     print('DEBUG: routeId dari HTTP response = $routeId');
     if (routeId != null) {
@@ -939,67 +918,67 @@ class MapPageController extends GetxController
           );
 
     _positionSub =
-        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-          (position) {
-            currentPosition.value = position;
+        Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen((position) {
+          currentPosition.value = position;
 
-            if (!_shouldEmitUpdate(position)) return;
-            _lastEmittedPosition = position;
-            _lastEmittedTime = DateTime.now();
+          if (!_shouldEmitUpdate(position)) return;
+          _lastEmittedPosition = position;
+          _lastEmittedTime = DateTime.now();
 
-            // if (!isUserInteracting.value &&
-            //     routeState.value == RouteState.onRoute) {
-            //   try {
-            //     final currentZoom =
-            //         animatedMapController.mapController.camera.zoom;
-            //     animatedMapController.animateTo(
-            //       dest: LatLng(position.latitude, position.longitude),
-            //       zoom: currentZoom,
-            //     );
-            //   } catch (e) {
-            //     print('Auto-follow error: $e');
-            //   }
-            // }
+          // if (!isUserInteracting.value &&
+          //     routeState.value == RouteState.onRoute) {
+          //   try {
+          //     final currentZoom =
+          //         animatedMapController.mapController.camera.zoom;
+          //     animatedMapController.animateTo(
+          //       dest: LatLng(position.latitude, position.longitude),
+          //       zoom: currentZoom,
+          //     );
+          //   } catch (e) {
+          //     print('Auto-follow error: $e');
+          //   }
+          // }
 
-            if (position.accuracy > 20) return;
-            if (routeState.value != RouteState.onRoute) return;
-            _trimRouteToPosition(LatLng(position.latitude, position.longitude));
-            _checkForRouteDrift(LatLng(position.latitude, position.longitude));
-            trackingService.sendPosition(
-              lat: position.latitude,
-              lon: position.longitude,
-              bearing: position.heading,
-              speed: position.speed,
-            );
+          if (position.accuracy > 20) return;
+          if (routeState.value != RouteState.onRoute) return;
+          _trimRouteToPosition(LatLng(position.latitude, position.longitude));
+          // _checkForRouteDrift(LatLng(position.latitude, position.longitude));
+          trackingService.sendPosition(
+            lat: position.latitude,
+            lon: position.longitude,
+            bearing: position.heading,
+            speed: position.speed,
+          );
 
-            final routeId = optimizedRoute.value?.routeId;
-            if (navController.isNavigating.value && routeId != null) {
-              final now = DateTime.now();
-              if (_lastNavSentAt == null ||
-                  now.difference(_lastNavSentAt!) >= _navMinInterval) {
-                _lastNavSentAt = now;
-                navController.sendLocationUpdate(
-                  lat: position.latitude,
-                  lng: position.longitude,
-                  bearing: position.heading,
-                  speed: position.speed,
-                  currentRouteId: routeId,
-                );
-              }
+          final routeId = optimizedRoute.value?.routeId;
+          if (navController.isNavigating.value && routeId != null) {
+            final now = DateTime.now();
+            if (_lastNavSentAt == null ||
+                now.difference(_lastNavSentAt!) >= _navMinInterval) {
+              _lastNavSentAt = now;
+              navController.sendLocationUpdate(
+                lat: position.latitude,
+                lng: position.longitude,
+                bearing: position.heading,
+                speed: position.speed,
+                currentRouteId: routeId,
+              );
             }
+          }
 
-            final distance = distanceToTargetInMeters(
-              position,
-              currentPackage!.latitude,
-              currentPackage!.longitude,
-            );
+          final distance = distanceToTargetInMeters(
+            position,
+            currentPackage!.latitude,
+            currentPackage!.longitude,
+          );
 
-            if (distance <= _arrivalThresholdMeters) {
-              routeState.value = RouteState.validating;
-              _notifyArrival();
-            }
-          },
-        );
+          if (distance <= _arrivalThresholdMeters) {
+            routeState.value = RouteState.validating;
+            _notifyArrival();
+          }
+        });
   }
 
   Future<void> _markAllAsPickedUp() async {
@@ -1036,8 +1015,19 @@ class MapPageController extends GetxController
   void handleConfirmPackage() async {
     if (currentPackage == null) return;
 
-    final confirmedPackage = currentPackage!;
+    if (capturedPhotos.isEmpty) {
+      Get.snackbar(
+        'Foto Wajib Diisi',
+        'Ambil foto bukti pengiriman dulu sebelum konfirmasi',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.white,
+        colorText: AppColors.textPrimary,
+        icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+      );
+      return;
+    }
 
+    final confirmedPackage = currentPackage!;
     final shipment = shipments.firstWhereOrNull(
       (s) => s.paket.id.toString() == confirmedPackage.id,
     );
@@ -1061,7 +1051,7 @@ class MapPageController extends GetxController
     deliveryQueue.removeAt(0);
     _updateRouteSegmentsFromQueue();
     _lastTrimIndex = null;
-    _driftStartTime = null;
+    // _driftStartTime = null;
     capturedPhotos.clear();
     routeState.value = deliveryQueue.isEmpty
         ? RouteState.empty
@@ -1122,61 +1112,63 @@ class MapPageController extends GetxController
   }
 
   List<Marker> buildPackageMarkers() {
-    print(
-      'DEBUG buildPackageMarkers - deliveryQueue length: ${deliveryQueue.length}, ids: ${deliveryQueue.map((p) => p.id).toList()}',
-    );
     final packageMarkers = deliveryQueue.map((pkg) {
-      final isActive = currentPackage != null && pkg.id == currentPackage!.id;
+      final isActive =
+          showRouteVisuals.value &&
+          currentPackage != null &&
+          pkg.id == currentPackage!.id;
       final size = isActive ? 40.0 : 26.0;
       final height = size * 1.25;
       return Marker(
         point: LatLng(pkg.latitude, pkg.longitude),
-        width: isActive ? 34 : 16,
-        height: isActive ? 34 : 16,
+        width: size,
+        height: height,
         alignment: Alignment.topCenter,
         child: PackageMapMarker(isActive: isActive),
       );
     }).toList();
 
-    final activeSegment = currentPackage != null
-        ? _routeSegments.firstWhereOrNull(
-            (seg) => seg.packageId == currentPackage!.id,
-          )
-        : null;
+    // if (showRouteVisuals.value) {
+    // final activeSegment = currentPackage != null
+    //     ? _routeSegments.firstWhereOrNull(
+    //         (seg) => seg.packageId == currentPackage!.id,
+    //       )
+    //     : null;
 
-    if (activeSegment != null && activeSegment.points.isNotEmpty) {
-      packageMarkers.add(
-        Marker(
-          point: activeSegment.points.first,
-          width: 25,
-          height: 25,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
-          ),
-        ),
-      );
+    // if (activeSegment != null && activeSegment.points.isNotEmpty) {
+    //   packageMarkers.add(
+    //     Marker(
+    //       point: activeSegment.points.first,
+    //       width: 25,
+    //       height: 25,
+    //       child: Container(
+    //         decoration: BoxDecoration(
+    //           color: Colors.green,
+    //           shape: BoxShape.circle,
+    //           border: Border.all(color: Colors.white, width: 2),
+    //         ),
+    //         child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
+    //       ),
+    //     ),
+    //   );
 
-      packageMarkers.add(
-        Marker(
-          point: activeSegment.points.last,
-          width: 25,
-          height: 25,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(Icons.stop, color: Colors.white, size: 18),
-          ),
-        ),
-      );
-    }
+    //   packageMarkers.add(
+    //     Marker(
+    //       point: activeSegment.points.last,
+    //       width: 25,
+    //       height: 25,
+    //       child: Container(
+    //         decoration: BoxDecoration(
+    //           color: Colors.red,
+    //           shape: BoxShape.circle,
+    //           border: Border.all(color: Colors.white, width: 2),
+    //         ),
+    //         child: const Icon(Icons.stop, color: Colors.white, size: 18),
+    //       ),
+    //     ),
+    //   );
+    // }
+    // }
 
     return packageMarkers;
   }

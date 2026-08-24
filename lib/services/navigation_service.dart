@@ -22,7 +22,7 @@ class NavigationService {
       throw Exception('Token tidak ditemukan');
     }
     final uri = Uri.parse(
-      'wss://linking-backgrounds-processor-situation.trycloudflare.com'
+      'wss://coleman-codes-portion-restore.trycloudflare.com'
       '/api/v1/ws/navigation?token=$token',
     );
     try {

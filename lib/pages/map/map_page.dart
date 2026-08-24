@@ -29,19 +29,50 @@ import 'package:Swift/components/common/date_chip.dart';
 import 'package:Swift/components/common/empty_state_widget.dart';
 import 'package:Swift/controllers/map_controller.dart';
 
-class MapPage extends GetView<MapPageController> {
+import '../../components/common/cod_badge.dart';
+
+class MapPage extends StatefulWidget {
   const MapPage({super.key});
 
   @override
+  State<MapPage> createState() => _MapPageState();
+}
+
+class _MapPageState extends State<MapPage> {
+  late final MapPageController controller;
+
+  // double sheetSize = MapPageController.collapsedSize;
+
+  @override
+  void initState() {
+    super.initState();
+
+    controller = Get.find<MapPageController>();
+
+    // controller.sheetController.addListener(_updateSheetPosition);
+  }
+
+  @override
+  void dispose() {
+    // controller.sheetController.removeListener(_updateSheetPosition);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       body: Stack(
         children: [
-          // ========== MAP BACKGROUND ==========
+          // ==========================================================
+          // MAP
+          // ==========================================================
           Positioned.fill(
             child: Builder(
               builder: (_) {
                 final initialPosition = controller.currentPosition.value;
+
                 final initialCenter = initialPosition != null
                     ? LatLng(
                         initialPosition.latitude,
@@ -53,11 +84,13 @@ class MapPage extends GetView<MapPageController> {
                   center: initialCenter,
                   zoom: 15,
                   controller: controller.animatedMapController.mapController,
+
                   polylinesLayer: Obx(
                     () => PolylineLayer(
                       polylines: controller.getRoutePolylines(),
                     ),
                   ),
+
                   markersLayer: Stack(
                     children: [
                       Obx(
@@ -65,6 +98,7 @@ class MapPage extends GetView<MapPageController> {
                           markers: controller.buildPackageMarkers(),
                         ),
                       ),
+
                       AnimatedUserMarkerLayer(
                         positionRx: controller.currentPosition,
                       ),
@@ -75,14 +109,18 @@ class MapPage extends GetView<MapPageController> {
             ),
           ),
 
-          // ========== OVERLAY PUTIH ==========
+          // ==========================================================
+          // WHITE OVERLAY
+          // ==========================================================
           Positioned.fill(
             child: IgnorePointer(
               child: Container(color: Colors.white.withOpacity(0.15)),
             ),
           ),
 
-          // ========== DATE CHIP ==========
+          // ==========================================================
+          // DATE CHIP
+          // ==========================================================
           SafeArea(
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -96,39 +134,9 @@ class MapPage extends GetView<MapPageController> {
             ),
           ),
 
-          // ========== FABs ==========
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: context.horizontalPadding,
-                bottom: 100,
-              ),
-              child: Align(
-                alignment: Alignment.bottomRight,
-                child: Column(
-                  children: [
-                    _MapFab(
-                      icon: Icons.inventory_2_rounded,
-                      onTap: () => Get.toNamed(AppRoutes.packageList),
-                      size: 40,
-                    ),
-                    const SizedBox(height: 10),
-                    _MapFab(
-                      icon: Icons.my_location_rounded,
-                      onTap: controller.handleRelocate,
-                      size: 40,
-                    ),
-                    _MapFab(
-                      icon: Icons.refresh,
-                      onTap: controller.recalculateRouteOrder,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ========== DRAGGABLE SHEET ==========
+          // ==========================================================
+          // DRAGGABLE SHEET
+          // ==========================================================
           DraggableScrollableSheet(
             controller: controller.sheetController,
             initialChildSize: MapPageController.collapsedSize,
@@ -144,13 +152,11 @@ class MapPage extends GetView<MapPageController> {
               return Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
                 child: ListView(
                   controller: scrollController,
+                  physics: const ClampingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
                     context.horizontalPadding,
                     0,
@@ -166,13 +172,37 @@ class MapPage extends GetView<MapPageController> {
             },
           ),
 
-          // ========== OVERLAY CALCULATING ==========
-          Obx(() {
-            if (controller.routeState.value == RouteState.calculating) {
-              return const RouteCalculatingOverlay();
-            }
-            return const SizedBox.shrink();
-          }),
+          // FAB
+          // FAB
+          AnimatedBuilder(
+            animation: controller.sheetController,
+            builder: (context, child) {
+              final currentSize = controller.sheetController.isAttached
+                  ? controller.sheetController.size
+                  : MapPageController.collapsedSize;
+              return Positioned(
+                right: context.horizontalPadding,
+                bottom: (screenHeight * currentSize) + 12,
+                child: child!,
+              );
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _MapFab(
+                  icon: Icons.inventory_2_rounded,
+                  onTap: () => Get.toNamed(AppRoutes.packageList),
+                  size: 50,
+                ),
+                const SizedBox(height: 10),
+                _MapFab(
+                  icon: Icons.my_location_rounded,
+                  onTap: () => controller.handleRelocate(),
+                  size: 50,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -252,6 +282,7 @@ class MapPage extends GetView<MapPageController> {
               address: pkg.address,
               serviceType: pkg.serviceType,
               resiNumber: pkg.resiNumber,
+              isCod: pkg.isCod,
             ),
           ),
         ),
@@ -270,8 +301,17 @@ class MapPage extends GetView<MapPageController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSummaryHeader(
-          leading: ServiceTypeBadge(
-            serviceType: controller.currentPackage!.serviceType,
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ServiceTypeBadge(
+                serviceType: controller.currentPackage!.serviceType,
+              ),
+              if (controller.currentPackage!.isCod) ...[
+                const SizedBox(width: 6),
+                const CodBadge(),
+              ],
+            ],
           ),
           trailing: Obx(
             () => Text(
@@ -331,12 +371,25 @@ class MapPage extends GetView<MapPageController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSummaryHeader(
-          leading: ServiceTypeBadge(
-            serviceType: controller.currentPackage!.serviceType,
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ServiceTypeBadge(
+                serviceType: controller.currentPackage!.serviceType,
+              ),
+              if (controller.currentPackage!.isCod) ...[
+                const SizedBox(width: 6),
+                const CodBadge(),
+              ],
+            ],
           ),
           resiNumber: controller.currentPackage!.resiNumber,
-          trailing: CallRecipientButton(
-            phoneNumber: controller.currentPackage!.phoneNumber,
+          trailing: Row(
+            children: [
+              CallRecipientButton(
+                phoneNumber: controller.currentPackage!.phoneNumber,
+              ),
+            ],
           ),
         ),
         RecipientInfoSection(
@@ -417,18 +470,22 @@ class _MapFab extends StatelessWidget {
   final double size;
 
   const _MapFab({required this.icon, required this.onTap, this.size = 40});
+
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
       shape: const CircleBorder(),
-      elevation: 3,
+      elevation: 4,
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.all(size * 0.25),
-          child: Icon(icon, size: size * 0.5, color: AppColors.primaryLight),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(
+            child: Icon(icon, size: size * 0.55, color: AppColors.primaryLight),
+          ),
         ),
       ),
     );

@@ -14,7 +14,6 @@ class PackageMapMarker extends StatelessWidget {
     return Stack(
       alignment: Alignment.bottomCenter,
       children: [
-        // pulse ring di belakang, sejajar sama ujung bawah pin
         Positioned(
           bottom: 2,
           child: Container(
@@ -32,51 +31,10 @@ class PackageMapMarker extends StatelessWidget {
   }
 
   Widget _buildPin({required double size, required Color color}) {
-    return CustomPaint(
-      size: Size(size, size * 1.25),
-      painter: _PinPainter(color: color),
+    return Icon(
+      Icons.location_on,
+      size: size,
+      color: color,
     );
   }
-}
-
-class _PinPainter extends CustomPainter {
-  final Color color;
-  _PinPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final radius = w / 2;
-
-    final path = Path()
-      ..moveTo(w / 2, h) // ujung bawah pin (runcing)
-      ..lineTo(w * 0.22, h * 0.55)
-      ..arcToPoint(
-        Offset(w * 0.78, h * 0.55),
-        radius: Radius.circular(radius),
-        clockwise: true,
-      )
-      ..close();
-
-    final fillPaint = Paint()..color = color;
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    canvas.drawPath(path, fillPaint);
-    canvas.drawPath(path, borderPaint);
-
-    // lingkaran kecil putih di tengah kepala pin, biar ada aksen
-    canvas.drawCircle(
-      Offset(w / 2, h * 0.4),
-      w * 0.15,
-      Paint()..color = Colors.white,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _PinPainter oldDelegate) =>
-      oldDelegate.color != color;
 }

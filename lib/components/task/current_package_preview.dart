@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/package/package_model.dart';
-import '../common/service_type_badge.dart'; // tambahan import
+import '../common/service_type_badge.dart';
+import '../common/cod_badge.dart'; // tambahan import
 
 class CurrentPackagePreview extends StatelessWidget {
   final String address;
   final ServiceType serviceType;
   final String resiNumber;
+  final bool isCod; // tambahan
 
   const CurrentPackagePreview({
     super.key,
     required this.address,
     required this.serviceType,
     required this.resiNumber,
+    this.isCod = false, 
   });
 
   @override
@@ -29,6 +32,10 @@ class CurrentPackagePreview extends StatelessWidget {
               Row(
                 children: [
                   ServiceTypeBadge(serviceType: serviceType),
+                  if (isCod) ...[
+                    const SizedBox(width: 6),
+                    const CodBadge(),
+                  ],
                   const SizedBox(width: 6),
                   Text(
                     resiNumber,
