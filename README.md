@@ -54,6 +54,14 @@ Endpoint yang digunakan:
 
 ---
 
+## Akun Demo
+
+| Username | Password |
+|---|---|
+| `sari` | `rahasia123` |
+| `joko` | `rahasia123` |
+| `budi` | `rahasia123` |
+
 # Konfigurasi Backend URL
 
 Aplikasi tidak menghardcode alamat backend secara langsung di dalam source code.
