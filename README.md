@@ -54,6 +54,16 @@ Endpoint yang digunakan:
 
 ---
 
+## Akun Demo
+Berikut merupakan akun kurir dari seed backend yang dapat diakses
+| Username | Password |
+|---|---|
+| `sari` | `rahasia123` |
+| `joko` | `rahasia123` |
+| `budi` | `rahasia123` |
+
+Catatan: Penyebaran paket setiap akun kurir berlokasi secara spesifik di area Besito, Kudus, Jawa Tengah. Testing menggunakan aplikasi FakeGPS pihak ketiga memungkinkan perpindahan lokasi.
+
 # Konfigurasi Backend URL
 
 Aplikasi tidak menghardcode alamat backend secara langsung di dalam source code.
