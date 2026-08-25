@@ -83,7 +83,7 @@ Dengan nilai default:
 ```dart
 static const String baseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://10.0.2.2:8000/',
+  defaultValue: 'http://10.0.2.2:8001/',
 );
 ```
 
@@ -183,13 +183,13 @@ http://localhost:8000/
 Android Emulator dapat mengaksesnya melalui:
 
 ```text
-http://10.0.2.2:8000/
+http://10.0.2.2:8001/
 ```
 
 Jalankan:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8001/
 ```
 
 ---
@@ -199,7 +199,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/
 Untuk iOS Simulator, gunakan:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://localhost:8000/
+flutter run --dart-define=API_BASE_URL=http://localhost:8001/
 ```
 
 ---
@@ -213,7 +213,7 @@ Gunakan alamat IP lokal komputer.
 Contoh:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000/
+flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8001/
 ```
 
 Ganti:
@@ -249,7 +249,7 @@ flutter run \
 
 ```bash
 flutter run \
-  --dart-define=API_BASE_URL=http://10.0.2.2:8000/
+  --dart-define=API_BASE_URL=http://10.0.2.2:8001/
 ```
 
 ---
