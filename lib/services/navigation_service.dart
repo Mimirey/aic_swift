@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:ffi';
 import 'package:Swift/core/utils/token_storage.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../core/network/api_constants.dart';
 
 class NavigationService {
   NavigationService._();
@@ -22,9 +23,8 @@ class NavigationService {
       throw Exception('Token tidak ditemukan');
     }
     final uri = Uri.parse(
-      'wss://minolta-chan-database-puzzles.trycloudflare.com'
-      '/api/v1/ws/navigation?token=$token',
-    );
+    '${ApiConstants.wsBaseUrl}/${ApiConstants.wsNavigation}?token=$token',
+  );
     try {
       final channel = WebSocketChannel.connect(uri);
       await channel.ready;
