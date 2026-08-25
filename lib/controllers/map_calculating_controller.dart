@@ -13,19 +13,11 @@ class MapCalculatingController extends GetxController
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
-    
-    _startNavigationTimer();
   }
 
   @override
   void onClose() {
     pulseController.dispose();
     super.onClose();
-  }
-
-  void _startNavigationTimer() {
-    Future.delayed(const Duration(seconds: 2), () {
-      Get.offNamed(AppRoutes.map);
-    });
   }
 }

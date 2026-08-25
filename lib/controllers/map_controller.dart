@@ -877,7 +877,9 @@ class MapPageController extends GetxController
 
   void startRoute() async {
     routeState.value = RouteState.calculating;
+    Get.toNamed(AppRoutes.mapCalculating);
     await _loadOptimizedRoute();
+    
 
     if (routePoints.isEmpty) {
       routeState.value = RouteState.assigned;
@@ -899,6 +901,8 @@ class MapPageController extends GetxController
         print('NAV: gagal connect ke navigation service');
       }
     }
+
+    Get.back();
   }
 
   void _startWatchingArrival() {

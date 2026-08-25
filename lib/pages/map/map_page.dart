@@ -12,7 +12,6 @@ import 'package:Swift/components/task/task_summary_header.dart';
 import 'package:Swift/components/task/recipient_info_section.dart';
 import 'package:Swift/components/task/recipient_note_card.dart';
 import 'package:Swift/components/task/next_package_list.dart';
-import 'package:Swift/data/dummy_next_packages.dart';
 import 'package:Swift/components/buttons/primary_button.dart';
 import 'package:Swift/components/task/call_recipient_button.dart';
 import 'package:Swift/components/task/current_package_preview.dart';
@@ -30,6 +29,7 @@ import 'package:Swift/components/common/empty_state_widget.dart';
 import 'package:Swift/controllers/map_controller.dart';
 
 import '../../components/common/cod_badge.dart';
+import '../../components/task/map_calculating_overlay.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -234,7 +234,7 @@ class _MapPageState extends State<MapPage> {
         return _buildValidatingContent();
 
       case RouteState.calculating:
-        return const SizedBox.shrink();
+        return _buildAssignedContent();
 
       default:
         return const SizedBox.shrink();

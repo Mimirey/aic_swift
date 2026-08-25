@@ -1,9 +1,9 @@
+import 'package:Swift/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:Swift/config/routes/app_routes.dart';
 import 'package:Swift/config/routes/route_names.dart';
-import 'package:Swift/config/themes/app_themes.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/intl_standalone.dart';
@@ -25,7 +25,7 @@ class MainApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Flutter Demo',
-      theme: AppThemes.lightTheme,
+      theme: AppTheme.light,
       themeMode: ThemeMode.light,
       initialRoute: AppRoutes.splash,
       getPages: AppPages.pages,
