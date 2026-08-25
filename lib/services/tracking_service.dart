@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../core/network/api_constants.dart';
 import '../core/utils/token_storage.dart';
 
 class TrackingService {
@@ -14,8 +15,7 @@ class TrackingService {
     throw Exception('Token tidak ditemukan');
   }
   final uri = Uri.parse(
-    'wss://minolta-chan-database-puzzles.trycloudflare.com'
-    '/api/v1/ws/driver/position?token=$token',
+    '${ApiConstants.wsBaseUrl}/${ApiConstants.wsDriverPosition}?token=$token',
   );
   print('Connecting WebSocket...');
   try {
