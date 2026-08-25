@@ -432,7 +432,7 @@ class MapPageController extends GetxController
 
     _isRecalculating = true;
     try {
-      
+      await _loadOptimizedRoute();
 
       // Sinkronkan ulang leg aktif ke WS navigation session
       if (currentPackage != null) {
@@ -446,11 +446,11 @@ class MapPageController extends GetxController
         }
       }
 
-      Get.snackbar(
-        'Urutan Diperbarui',
-        'Rute pengiriman disesuaikan dengan posisimu',
-        snackPosition: SnackPosition.TOP,
-      );
+      // Get.snackbar(
+      //   'Urutan Diperbarui',
+      //   'Rute pengiriman disesuaikan dengan posisimu',
+      //   snackPosition: SnackPosition.TOP,
+      // );
     } finally {
       _isRecalculating = false;
     }
